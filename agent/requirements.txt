@@ -1,0 +1,11 @@
+# 智能体服务依赖（版本为阶段 0 实测可用的组合，2026-10-16）
+#
+# 安装方式（在 agent 目录下）：
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# 说明：uvicorn[standard] 会额外装上 httptools / watchfiles / websockets 等可选依赖，
+# 用于更快的 HTTP 解析与 --reload 热重载。
+
+fastapi==0.143.2
+uvicorn[standard]==0.54.0
+openai==3.31.0

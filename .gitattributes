@@ -1,0 +1,7 @@
+# Git 换行符策略
+# 批处理脚本必须保持 CRLF 换行（用 LF 会导致 cmd.exe 解析错乱），因此显式声明。
+# 详见 docs/notes/阶段0-开发笔记.md 的「坑 5」。
+*.bat text eol=crlf
+
+# 文本文件统一按 LF 存储，检出时按平台决定
+* text=auto

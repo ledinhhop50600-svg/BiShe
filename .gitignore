@@ -1,0 +1,34 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+target/
+.venv/
+dist/
+__pycache__/
+*.py[cod]
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.iml
+
+# ===== 本地配置与密钥（绝不提交） =====
+# 大模型 API Key、数据库密码等本地敏感配置放这里，不进版本库
+.env
+.env.local
+*.local
+application-local.properties
+
+# ===== 学校材料（含其他学生的论文与表格，不纳入版本库）=====
+# 将来若把项目推到 GitHub 做求职作品，这部分不应出现在仓库里。
+# 需要备份学校材料请另行复制到网盘或移动硬盘。
+文件/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 临时文件 =====
+*.log
+*.tmp
+~$*
