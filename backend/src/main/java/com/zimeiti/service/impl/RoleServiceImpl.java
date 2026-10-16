@@ -108,6 +108,12 @@ public class RoleServiceImpl implements RoleService {
         if (userCount != null && userCount > 0) {
             throw new BizException("该角色下还有 " + userCount + " 个用户，请先调整这些用户的角色");
         }
+        // 角色标识同理：先改名再逻辑删除，避免 role_key 上的唯一索引把标识永久占住
+        SysRole renamed = new SysRole();
+        renamed.setId(id);
+        renamed.setRoleKey(role.getRoleKey() + "#del" + id);
+        roleMapper.updateById(renamed);
+
         roleMapper.deleteById(id);
         roleMenuMapper.delete(Wrappers.<SysRoleMenu>lambdaQuery().eq(SysRoleMenu::getRoleId, id));
     }

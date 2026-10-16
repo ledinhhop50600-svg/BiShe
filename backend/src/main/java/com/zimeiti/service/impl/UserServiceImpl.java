@@ -145,6 +145,17 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BizException("用户不存在");
         }
+
+        // 先改名，再逻辑删除。
+        // 原因：username 上有唯一索引，而唯一索引对"已逻辑删除"的记录同样生效 ——
+        // 如果原样保留账号名，这个名字就永远无法再被使用（新用户创建时会撞数据库唯一约束，
+        // 报出一个看不懂的 SQL 错误）。改成 原名#del<id>，既释放了账号名，
+        // 又保留了"这个名字曾经属于谁"的可追溯信息。
+        SysUser renamed = new SysUser();
+        renamed.setId(id);
+        renamed.setUsername(user.getUsername() + "#del" + id);
+        userMapper.updateById(renamed);
+
         // 逻辑删除：数据仍在库里，只是查询时被过滤掉（平台数据需要可追溯）
         userMapper.deleteById(id);
         userRoleMapper.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId, id));
