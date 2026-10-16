@@ -13,9 +13,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 前端以 /api 开头的请求转发给后端 8080 端口，避免浏览器跨域问题
+      // 前端以 /api 开头的请求转发给后端 8080 端口，避免浏览器跨域问题。
+      // 后端地址可用环境变量 VITE_BACKEND_TARGET 覆盖（例如换端口调试时使用）。
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_BACKEND_TARGET || 'http://localhost:8080',
         changeOrigin: true,
       },
     },
