@@ -20,6 +20,42 @@ const stats = ref({})
 
 const scope = computed(() => stats.value.scope || 'creator')
 
+/** 智能体审核统计：只有管理员与审核员有 */
+const agentStats = computed(() => stats.value.agentStats || null)
+
+const agentCards = computed(() => {
+  const a = agentStats.value
+  if (!a) return []
+  return [
+    { label: '智能体审核次数', value: a.recordCount ?? 0, color: '#409eff' },
+    { label: '人工改判率', value: `${a.overrideRate ?? 0}%`, color: '#e6a23c' },
+    { label: '改判次数', value: a.overrideCount ?? 0, color: '#f56c6c' },
+    { label: '智能体失败', value: a.failedCount ?? 0, color: '#909399' },
+  ]
+})
+
+const agentRows = computed(() => {
+  const a = agentStats.value
+  if (!a) return []
+  return [
+    { label: '通过', value: a.risk0 ?? 0 },
+    { label: '疑似', value: a.risk1 ?? 0 },
+    { label: '违规', value: a.risk2 ?? 0 },
+    { label: '严重', value: a.risk3 ?? 0 },
+    { label: '未判定（调用失败）', value: a.failedCount ?? 0 },
+  ]
+})
+
+const reviewRows = computed(() => {
+  const a = agentStats.value
+  if (!a) return []
+  return [
+    { label: '采纳智能体建议', value: a.adoptCount ?? 0 },
+    { label: '改判', value: a.overrideCount ?? 0 },
+    { label: '人工判定（无可用初判）', value: a.manualCount ?? 0 },
+  ]
+})
+
 const adminCards = [
   { key: 'userCount', label: '用户总数', color: '#409eff' },
   { key: 'articleCount', label: '稿件总数', color: '#67c23a' },
@@ -129,6 +165,37 @@ async function loadStats() {
       </el-table>
     </el-card>
 
+    <el-card v-if="agentStats" shadow="never" class="section">
+      <template #header>
+        <div class="section-header">
+          <b>智能体审核与人机协同</b>
+          <span class="hint">改判率 = 改判 /（采纳 + 改判）；人工判定不计入</span>
+        </div>
+      </template>
+      <el-row :gutter="16">
+        <el-col v-for="c in agentCards" :key="c.label" :span="6">
+          <el-card shadow="hover">
+            <div class="card-label">{{ c.label }}</div>
+            <div class="card-value" :style="{ color: c.color }">{{ c.value }}</div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <el-row :gutter="16" class="agent-body">
+        <el-col :span="12">
+          <el-table :data="agentRows" border size="small">
+            <el-table-column prop="label" label="智能体判定" />
+            <el-table-column prop="value" label="条数" width="100" />
+          </el-table>
+        </el-col>
+        <el-col :span="12">
+          <el-table :data="reviewRows" border size="small">
+            <el-table-column prop="label" label="人工处理" />
+            <el-table-column prop="value" label="条数" width="100" />
+          </el-table>
+        </el-col>
+      </el-row>
+    </el-card>
+
     <!-- 审核员没有状态分布表，给一个直达工作台的入口 -->
     <el-card v-if="scope === 'reviewer'" shadow="never" class="section">
       <template #header><b>待办</b></template>
@@ -148,12 +215,6 @@ async function loadStats() {
         </div>
       </div>
     </el-card>
-
-    <el-alert type="info" :closable="false" class="section">
-      <template #title>
-        智能体接入后，看板会增加"智能体判定分布"与"人工改判率"——用来量化人机协同的效果。
-      </template>
-    </el-alert>
   </div>
 </template>
 
@@ -192,6 +253,21 @@ async function loadStats() {
 }
 
 .section {
+  margin-top: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.section-header .hint {
+  margin-top: 0;
+}
+
+.agent-body {
   margin-top: 16px;
 }
 

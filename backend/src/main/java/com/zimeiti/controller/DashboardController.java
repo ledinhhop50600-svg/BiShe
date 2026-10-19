@@ -9,6 +9,7 @@ import com.zimeiti.entity.BizReport;
 import com.zimeiti.mapper.BizArticleMapper;
 import com.zimeiti.mapper.BizReportMapper;
 import com.zimeiti.mapper.SysUserMapper;
+import com.zimeiti.service.AuditRecordService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,6 +39,7 @@ public class DashboardController {
     private final SysUserMapper userMapper;
     private final BizArticleMapper articleMapper;
     private final BizReportMapper reportMapper;
+    private final AuditRecordService auditRecordService;
 
     @GetMapping("/stats")
     @SaCheckPermission("dashboard:view")
@@ -54,6 +56,8 @@ public class DashboardController {
             data.put("publishedCount", countByStatus(null, 2));
             data.put("rejectedCount", countByStatus(null, 3));
             data.put("blockedCount", countByStatus(null, 4));
+            // 人机协同效果：判定分布 + 改判率（管理员看全局）
+            data.put("agentStats", auditRecordService.stats());
         } else if (StpUtil.hasPermission("audit:workbench")) {
             // 审核员：任务视角
             data.put("scope", "reviewer");
@@ -63,6 +67,7 @@ public class DashboardController {
             data.put("todaySubmittedCount", articleMapper.selectCount(
                     Wrappers.<BizArticle>lambdaQuery()
                             .ge(BizArticle::getCreateTime, LocalDate.now().atStartOfDay())));
+            data.put("agentStats", auditRecordService.stats());
         } else {
             // 创作者：个人视角（只统计自己的稿件）
             long me = StpUtil.getLoginIdAsLong();

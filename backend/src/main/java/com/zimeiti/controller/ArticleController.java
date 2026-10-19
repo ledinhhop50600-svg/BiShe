@@ -8,6 +8,7 @@ import com.zimeiti.dto.ArticleReviewDTO;
 import com.zimeiti.dto.ArticleSaveDTO;
 import com.zimeiti.service.ArticleService;
 import com.zimeiti.service.AuditAgentService;
+import com.zimeiti.service.AuditRecordService;
 import com.zimeiti.vo.ArticleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ArticleController {
 
     private final ArticleService articleService;
     private final AuditAgentService auditAgentService;
+    private final AuditRecordService auditRecordService;
 
     /**
      * 后台稿件列表。
@@ -146,5 +148,18 @@ public class ArticleController {
     public Result<Map<String, Object>> agentAudit(@PathVariable Long id,
                                                   @RequestParam(defaultValue = "POST_AUDIT") String triggerType) {
         return Result.ok(auditAgentService.audit(id, triggerType));
+    }
+
+    /**
+     * 审核反馈：某篇稿件最新的智能体初判 + 审核员处理意见。
+     * <p>审核工作台与创作者反馈弹窗共用。
+     * 先调 {@code articleService.detail(id)}，复用它的数据权限（创作者只能看自己的稿件），
+     * 再读审核记录 —— 权限判断只写一处，避免两个入口口径不一致。
+     */
+    @GetMapping("/{id}/audit-feedback")
+    @SaCheckPermission(value = {"article:list", "audit:workbench", "creator:article"}, mode = SaMode.OR)
+    public Result<Map<String, Object>> auditFeedback(@PathVariable Long id) {
+        articleService.detail(id);
+        return Result.ok(auditRecordService.feedback(id));
     }
 }

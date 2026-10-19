@@ -100,8 +100,13 @@ const routes = [
         component: () => import('@/views/audit/sensitive/index.vue'),
         meta: { title: '敏感词库', perms: 'audit:sensitive' },
       },
-      // 审核记录与规则库在阶段 5 之后实现
-      todo('audit/record', '审核记录', 'audit:record'),
+      {
+        path: 'audit/record',
+        name: 'AuditRecord',
+        component: () => import('@/views/audit/record/index.vue'),
+        meta: { title: '审核记录', perms: 'audit:record' },
+      },
+      // 审核规则库在阶段 8 实现
       todo('audit/rule', '审核规则库', 'audit:rule'),
 
       // ---------- 平台管理与创作中心 ----------

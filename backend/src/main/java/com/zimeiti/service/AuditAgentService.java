@@ -1,7 +1,9 @@
 package com.zimeiti.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.zimeiti.common.AuditTriggerType;
 import com.zimeiti.common.BizException;
+import com.zimeiti.common.ContentHash;
 import com.zimeiti.entity.AuditPlatform;
 import com.zimeiti.entity.AuditRule;
 import com.zimeiti.entity.AuditSensitiveWord;
@@ -39,6 +41,7 @@ public class AuditAgentService {
     private final AuditPlatformMapper platformMapper;
     private final AuditSensitiveWordMapper wordMapper;
     private final AgentClient agentClient;
+    private final AuditRecordService auditRecordService;
 
     /**
      * 对一篇稿件调用智能体审核。
@@ -79,8 +82,17 @@ public class AuditAgentService {
         // 规则里的示例词常是完整短语，正文写法常有出入；短词（"加我微信"）能兜住这种情况。
         request.put("sensitiveWords", toWordList());
 
+        String contentHash = ContentHash.of(article.getTitle(), article.getContent());
         try {
-            return agentClient.audit(request);
+            Map<String, Object> result = agentClient.audit(request);
+            // 正式审核（POST_AUDIT）必须留痕；发布前预检只是给创作者的提示，不写入审核记录，
+            // 否则每点一次"预检"就多一条记录，会污染工作台与统计。
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+                Long recordId = auditRecordService.saveAgentResult(
+                        article.getId(), triggerType, null, contentHash, result, false, null);
+                result.put("auditRecordId", recordId);
+            }
+            return result;
         } catch (AgentClient.AgentUnavailableException e) {
             // 降级：不抛异常、不阻断业务，把"智能体不可用"如实告诉界面
             log.warn("智能体不可用，已降级为人工审核：{}", e.getMessage());
@@ -88,6 +100,11 @@ public class AuditAgentService {
             degraded.put("agentFailed", true);
             degraded.put("error", e.getMessage());
             degraded.put("message", "智能体服务不可用，请改为人工审核");
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+                Long recordId = auditRecordService.saveAgentResult(
+                        article.getId(), triggerType, null, contentHash, Map.of(), true, e.getMessage());
+                degraded.put("auditRecordId", recordId);
+            }
             return degraded;
         }
     }

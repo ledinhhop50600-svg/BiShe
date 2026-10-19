@@ -250,6 +250,7 @@ CREATE TABLE audit_record (
     reason              TEXT         COMMENT '判定理由（智能体生成的说明文字）',
     hit_rule_codes      VARCHAR(300)  DEFAULT NULL COMMENT '命中的规则编号，多个用逗号分隔，如 AD-003,FB-011',
     violation_fragments TEXT         COMMENT '违规片段（JSON 数组字符串，用于界面高亮与展示给创作者）',
+    content_hash        VARCHAR(64)   DEFAULT NULL COMMENT '判定时稿件标题+正文的 SHA-256；内容改过则本记录视为过期',
     suggestion          TEXT         COMMENT '处置建议与修改建议（反馈给创作者的具体改法）',
     model_name          VARCHAR(50)   DEFAULT NULL COMMENT '使用的模型，如 deepseek-flash（对比实验需要）',
     prompt_tokens       INT          NOT NULL DEFAULT 0 COMMENT '本次调用消耗的输入 token 数（成本统计）',

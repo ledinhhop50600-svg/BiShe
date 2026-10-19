@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteArticle, getMyArticles, submitArticle, withdrawArticle } from '@/api/article'
+import { deleteArticle, getAuditFeedback, getMyArticles, submitArticle, withdrawArticle } from '@/api/article'
 import { ARTICLE_STATUS, riskText, riskType, statusText, statusType } from '@/utils/articleStatus'
 
 /**
@@ -18,6 +18,8 @@ const query = reactive({ pageNum: 1, pageSize: 10, status: null })
 
 const feedbackVisible = ref(false)
 const feedback = ref(null)
+const auditFeedback = ref(null)
+const feedbackLoading = ref(false)
 
 onMounted(load)
 
@@ -67,9 +69,18 @@ async function onDelete(row) {
   await load()
 }
 
-function openFeedback(row) {
+async function openFeedback(row) {
   feedback.value = row
   feedbackVisible.value = true
+  auditFeedback.value = null
+  feedbackLoading.value = true
+  try {
+    auditFeedback.value = await getAuditFeedback(row.id)
+  } catch {
+    auditFeedback.value = null
+  } finally {
+    feedbackLoading.value = false
+  }
 }
 </script>
 
@@ -134,20 +145,55 @@ function openFeedback(row) {
       />
     </el-card>
 
-    <el-dialog v-model="feedbackVisible" title="审核反馈" width="560px">
+    <el-dialog v-model="feedbackVisible" title="审核反馈" width="640px">
       <template v-if="feedback">
-        <el-descriptions :column="1" border>
+        <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="稿件">{{ feedback.title }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="statusType(feedback.status)" size="small">{{ statusText(feedback.status) }}</el-tag>
           </el-descriptions-item>
         </el-descriptions>
-        <el-alert type="error" :closable="false" class="block">
+
+        <div class="feedback-label">审核意见</div>
+        <el-alert type="error" :closable="false">
           <template #title>{{ feedback.rejectReason || '（未填写原因）' }}</template>
         </el-alert>
+
+        <div v-loading="feedbackLoading" class="agent-feedback">
+          <template v-if="auditFeedback?.record">
+            <div class="feedback-label">
+              智能体初审
+              <el-tag :type="riskType(auditFeedback.record.riskLevel)" size="small" class="ml">
+                {{ auditFeedback.record.riskLevelText }}
+              </el-tag>
+              <el-tag v-if="auditFeedback.record.modelName === 'agent-failed'" type="danger" size="small" class="ml">
+                调用失败
+              </el-tag>
+            </div>
+            <div class="reason-line">{{ auditFeedback.record.reason }}</div>
+
+            <div v-for="(v, idx) in auditFeedback.record.violations" :key="idx" class="violation">
+              <el-tag type="danger" size="small">{{ v.issue }}</el-tag>
+              <span class="fragment">「{{ v.fragment }}」</span>
+              <div class="suggestion">修改建议：{{ v.suggestion }}</div>
+            </div>
+            <div v-if="auditFeedback.record.suggestion" class="suggestion">
+              处置建议：{{ auditFeedback.record.suggestion }}
+            </div>
+
+            <div v-if="auditFeedback.review" class="review-line">
+              审核员 {{ auditFeedback.review.reviewerName }} ·
+              {{ auditFeedback.review.actionText }}（最终：{{ auditFeedback.review.finalLevelText }}）
+            </div>
+          </template>
+          <el-alert v-else-if="!feedbackLoading" type="info" :closable="false" class="block">
+            <template #title>本轮没有智能体初审记录，以上为审核员的处理意见。</template>
+          </el-alert>
+        </div>
+
         <el-alert type="info" :closable="false" class="block">
           <template #title>
-            修改后可以重新提交。智能体接入后，这里的反馈会包含"具体违规片段"与"逐条修改建议"。
+            修改后可以重新提交；重新提交后，智能体会对修改后的内容重新初审。
           </template>
         </el-alert>
       </template>
@@ -177,5 +223,53 @@ function openFeedback(row) {
 
 .block {
   margin-top: 12px;
+}
+
+.feedback-label {
+  margin: 14px 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+}
+
+.agent-feedback {
+  min-height: 40px;
+}
+
+.reason-line {
+  color: #1f2937;
+  line-height: 1.8;
+  font-size: 13px;
+}
+
+.violation {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border-radius: 6px;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.fragment {
+  color: #b91c1c;
+  margin-left: 6px;
+}
+
+.suggestion {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.7;
+}
+
+.review-line {
+  margin-top: 10px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.ml {
+  margin-left: 6px;
 }
 </style>

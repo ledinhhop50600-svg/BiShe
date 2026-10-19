@@ -3,14 +3,21 @@ package com.zimeiti.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zimeiti.common.AuditTriggerType;
 import com.zimeiti.common.BizException;
+import com.zimeiti.common.ContentHash;
 import com.zimeiti.common.PageResult;
+import com.zimeiti.common.ReviewActions;
 import com.zimeiti.dto.ArticleReviewDTO;
 import com.zimeiti.dto.ArticleSaveDTO;
+import com.zimeiti.entity.AuditRecord;
+import com.zimeiti.entity.AuditReview;
 import com.zimeiti.entity.BizArticle;
 import com.zimeiti.entity.BizArticleTag;
 import com.zimeiti.entity.BizCategory;
 import com.zimeiti.entity.BizTag;
+import com.zimeiti.mapper.AuditRecordMapper;
+import com.zimeiti.mapper.AuditReviewMapper;
 import com.zimeiti.mapper.BizArticleMapper;
 import com.zimeiti.mapper.BizArticleTagMapper;
 import com.zimeiti.mapper.BizCategoryMapper;
@@ -51,6 +58,8 @@ public class ArticleServiceImpl implements ArticleService {
     private final BizCategoryMapper categoryMapper;
     private final BizTagMapper tagMapper;
     private final SysUserMapper userMapper;
+    private final AuditRecordMapper auditRecordMapper;
+    private final AuditReviewMapper auditReviewMapper;
 
     @Override
     public PageResult<ArticleVO> page(long current, long size, String title, Integer status, Long categoryId) {
@@ -193,6 +202,7 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void review(Long id, ArticleReviewDTO dto) {
         BizArticle article = mustGet(id);
         if (article.getStatus() != STATUS_PENDING) {
@@ -203,10 +213,59 @@ public class ArticleServiceImpl implements ArticleService {
         if (article.getAuthorId() == StpUtil.getLoginIdAsLong()) {
             throw new BizException("不能审核自己投稿的稿件，请由其他审核员处理");
         }
+
         String action = dto.getAction();
+        int finalLevel = switch (action) {
+            case "approve" -> 0;
+            case "reject" -> 2;
+            case "block" -> 3;
+            default -> throw new BizException("不支持的审核动作：" + action);
+        };
+        if (finalLevel != 0) {
+            requireReason(dto);
+        }
+
+        // ---- 1) 找到可用的智能体初判；没有 / 失败 / 已过期都视为"人工判定" ----
+        String currentHash = ContentHash.of(article.getTitle(), article.getContent());
+        AuditRecord record = latestRecord(id);
+        boolean fresh = isFresh(record, article, currentHash);
+        boolean usable = fresh
+                && record.getRiskLevel() != null && record.getRiskLevel() >= 0
+                && !"agent-failed".equals(record.getModelName())
+                && !"no-agent".equals(record.getModelName())
+                && !"content-changed".equals(record.getModelName());
+        if (!usable) {
+            record = insertManualRecord(id, record == null
+                    ? "未运行智能体初审，由审核员直接人工判定。"
+                    : "稿件在初审后被修改，原结论已失效，由审核员人工判定。",
+                    record == null ? "no-agent" : "content-changed", currentHash);
+        }
+
+        // ---- 2) 判断采纳还是改判（口径与页面提示保持一致）----
+        int reviewAction;
+        if (!usable) {
+            reviewAction = ReviewActions.MANUAL;
+        } else if (isOverride(record.getRiskLevel(), action)) {
+            reviewAction = ReviewActions.OVERRIDE;
+            if (!StringUtils.hasText(dto.getReason())) {
+                throw new BizException("改判必须填写原因：请说明为什么不采纳智能体的判定");
+            }
+        } else {
+            reviewAction = ReviewActions.ADOPT;
+        }
+
+        AuditReview review = new AuditReview();
+        review.setAuditRecordId(record.getId());
+        review.setArticleId(id);
+        review.setReviewerId(StpUtil.getLoginIdAsLong());
+        review.setAction(reviewAction);
+        review.setFinalLevel(finalLevel);
+        review.setRemark(dto.getReason());
+        auditReviewMapper.insert(review);
+
+        // ---- 3) 更新稿件状态 ----
         BizArticle update = new BizArticle();
         update.setId(id);
-
         switch (action) {
             case "approve" -> {
                 update.setStatus(STATUS_PUBLISHED);
@@ -215,13 +274,11 @@ public class ArticleServiceImpl implements ArticleService {
                 update.setRejectReason("");
             }
             case "reject" -> {
-                requireReason(dto);
                 update.setStatus(STATUS_REJECTED);
                 update.setRiskLevel(2);
                 update.setRejectReason(dto.getReason());
             }
             case "block" -> {
-                requireReason(dto);
                 update.setStatus(STATUS_BLOCKED);
                 update.setRiskLevel(3);
                 update.setRejectReason(dto.getReason());
@@ -229,6 +286,58 @@ public class ArticleServiceImpl implements ArticleService {
             default -> throw new BizException("不支持的审核动作：" + action);
         }
         articleMapper.updateById(update);
+    }
+
+    /**
+     * 改判口径：只有"AI 说通过/疑似、人却驳回或阻断"和"AI 说违规/严重、人却通过"才算改判。
+     * <p>「疑似」本来就是交给人工决定的，人工通过或驳回都不算改判 ——
+     * 否则改判率会被正常的"疑似转人工"流程虚高，失去分析意义。
+     */
+    private boolean isOverride(int agentLevel, String action) {
+        if ("approve".equals(action)) {
+            return agentLevel >= 2;
+        }
+        return agentLevel == 0;
+    }
+
+    private AuditRecord latestRecord(Long articleId) {
+        return auditRecordMapper.selectOne(Wrappers.<AuditRecord>lambdaQuery()
+                .eq(AuditRecord::getArticleId, articleId)
+                .orderByDesc(AuditRecord::getId)
+                .last("LIMIT 1"));
+    }
+
+    /** 记录是否对应当前这一版内容（优先内容哈希，旧记录退回时间比较） */
+    private boolean isFresh(AuditRecord record, BizArticle article, String currentHash) {
+        if (record == null) {
+            return false;
+        }
+        if (StringUtils.hasText(record.getContentHash())) {
+            return record.getContentHash().equals(currentHash);
+        }
+        return record.getCreateTime() != null && article.getUpdateTime() != null
+                && !record.getCreateTime().isBefore(article.getUpdateTime());
+    }
+
+    /** 没有可用的初判时补一条记录：audit_review 必须能追溯到一条判定依据 */
+    private AuditRecord insertManualRecord(Long articleId, String reason, String modelName,
+                                           String contentHash) {
+        AuditRecord record = new AuditRecord();
+        record.setArticleId(articleId);
+        record.setTriggerType(AuditTriggerType.POST_AUDIT.code());
+        record.setRiskLevel(-1);
+        record.setReason(reason);
+        record.setHitRuleCodes("");
+        record.setViolationFragments("[]");
+        // 人工记录也绑定当前内容：这样审核完成后稿件更新时间变化不会把它误判为"过期"
+        record.setContentHash(contentHash);
+        record.setSuggestion("");
+        record.setModelName(modelName);
+        record.setPromptTokens(0);
+        record.setCompletionTokens(0);
+        record.setDurationMs(0);
+        auditRecordMapper.insert(record);
+        return record;
     }
 
     @Override

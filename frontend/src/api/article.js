@@ -49,3 +49,21 @@ export function reviewArticle(id, data) {
 export function offlineArticle(id) {
   return request.put(`/article/${id}/offline`)
 }
+
+/**
+ * 运行智能体审核。
+ * <p>单独放宽超时：后端审核客户端是 30 秒、失败还会重试一次，用全局的 30 秒
+ * 会在后端仍在判定时先报"网络异常"。
+ * <p>triggerType：POST_AUDIT（正式审核，会落库）或 PRE_CHECK（预检，不落库）。
+ */
+export function agentAudit(id, triggerType = 'POST_AUDIT') {
+  return request.post(`/article/${id}/agent-audit`, null, {
+    params: { triggerType },
+    timeout: 90000,
+  })
+}
+
+/** 审核反馈：最新智能体初判 + 审核员处理意见 */
+export function getAuditFeedback(id) {
+  return request.get(`/article/${id}/audit-feedback`)
+}
