@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>适配结果人工评分</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --line: #e5e7eb;
+    --text: #1f2937; --muted: #6b7280; --primary: #2563eb;
+    --ok-bg: #ecfdf5; --ok: #047857; --warn-bg: #fffbeb; --warn: #b45309;
+    --bad-bg: #fef2f2; --bad: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+  }
+  header { max-width: 1240px; margin: 0 auto; padding: 28px 20px 8px; }
+  h1 { margin: 0 0 6px; font-size: 26px; }
+  .sub { margin: 0 0 14px; color: var(--muted); }
+  .rubric {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 14px;
+  }
+  .rubric summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+  .rubric table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  .rubric th, .rubric td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .rubric th { background: #f8fafc; }
+  .toolbar {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 16px; margin-bottom: 18px; font-size: 14px;
+  }
+  .toolbar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .toolbar .progress { margin-left: auto; font-weight: 600; color: var(--primary); }
+  .toolbar button, .sticky button {
+    border: 1px solid var(--line); background: #fff; border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; font-size: 14px;
+  }
+  .toolbar button:hover, .sticky button:hover { border-color: var(--primary); color: var(--primary); }
+  main { max-width: 1240px; margin: 0 auto; padding: 0 20px 110px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .card-title { font-size: 16px; font-weight: 600; }
+  .badge {
+    display: inline-block; background: #eff6ff; color: #1d4ed8; border-radius: 999px;
+    padding: 2px 10px; font-size: 12px; margin-left: 6px;
+  }
+  .status { font-size: 12px; }
+  .status .ok { color: var(--ok); background: var(--ok-bg); padding: 2px 8px; border-radius: 999px; }
+  .status .warn { color: var(--warn); background: var(--warn-bg); padding: 2px 8px; border-radius: 999px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .pane h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .content {
+    white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.75;
+    background: #f9fafb; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; max-height: 300px; overflow: auto;
+  }
+  .content.adapted { background: #f8fbff; }
+  .adapted-title { font-weight: 600; margin-bottom: 8px; }
+  .tag-list { margin-top: 8px; font-size: 12px; color: #4b5563; }
+  .tag-list span { display: inline-block; background: #f1f5f9; border-radius: 6px; padding: 2px 8px; margin: 2px 4px 2px 0; }
+  .scores { margin-top: 16px; border-top: 1px dashed var(--line); padding-top: 12px; }
+  .score-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .score-label { width: 96px; font-size: 13px; font-weight: 600; }
+  .radio-group { display: flex; gap: 6px; }
+  .radio-group label {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    min-width: 44px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 9px; cursor: pointer; font-size: 13px; background: #fff;
+  }
+  .radio-group label:hover { border-color: var(--primary); }
+  .radio-group input { margin: 0; }
+  .anchor { color: var(--muted); font-size: 12px; }
+  textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 11px; font-size: 13px; font-family: inherit; margin-top: 6px;
+    resize: vertical; min-height: 54px;
+  }
+  .llm {
+    margin-top: 10px; font-size: 12px; color: var(--muted);
+    background: #f8fafc; border: 1px dashed var(--line); border-radius: 8px; padding: 7px 10px;
+  }
+  .hidden { display: none; }
+  .sticky {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: rgba(255,255,255,.96); border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 14px rgba(15,23,42,.06);
+  }
+  .sticky-inner {
+    max-width: 1240px; margin: 0 auto; padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .sticky .progress { color: var(--primary); font-weight: 600; }
+  .sticky button.primary {
+    margin-left: auto; background: var(--primary); color: #fff; border-color: var(--primary);
+    padding: 9px 22px; font-weight: 600;
+  }
+  .sticky button.primary:hover { background: #1d4ed8; color: #fff; }
+  .hint { color: var(--muted); font-size: 12px; }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .score-label { width: 100%; }
+  }
+  @media print {
+    body { background: #fff; }
+    .toolbar, .sticky { display: none; }
+    .card { break-inside: avoid; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>适配结果人工评分</h1>
+  <p class="sub">
+    共 <b id="total">12</b> 条。每条先看「原文」，再看「适配结果」，然后凭第一印象给三项打 1-5 分。
+    大约 10-15 分钟；不需要懂技术。
+  </p>
+
+  <details class="rubric" open>
+    <summary>评分标准（先看这里）</summary>
+    <table>
+      <thead>
+        <tr><th>分数</th><th>风格符合度</th><th>信息保留度</th><th>可读性</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>1</b></td><td>完全不像这个平台（比如公众号版本写得像微博）</td><td>大量信息丢失，或编造了原文没有的事实</td><td>语句不通、结构混乱，很难读</td></tr>
+        <tr><td><b>2</b></td><td>明显不像，只有零星平台特征</td><td>丢了关键信息，或有明显编造</td><td>多处别扭，需要反复读</td></tr>
+        <tr><td><b>3</b></td><td>一般，能看出是给这个平台写的，但不出彩</td><td>主要信息在，次要信息有出入</td><td>基本能读，偶尔卡顿</td></tr>
+        <tr><td><b>4</b></td><td>比较像，符合平台习惯</td><td>核心信息完整，细节有小差异</td><td>通顺，结构清楚</td></tr>
+        <tr><td><b>5</b></td><td>很像，可以直接发到这个平台</td><td>完整准确，没有编造</td><td>流畅、好读，段落/节奏合适</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">
+      三条判断线：<b>像不像这个平台</b>（风格）、<b>有没有丢/编造信息</b>（保留）、
+      <b>读起来顺不顺</b>（可读）。拿不准就给 3 分，不需要纠结。
+    </p>
+  </details>
+
+  <div class="toolbar">
+    <label><input type="checkbox" id="showLlm"> 显示 LLM 评分（建议全部评完再看，避免被带偏）</label>
+    <button id="clear">清空重评</button>
+    <span class="progress" id="progress">已完成 0 / 12</span>
+  </div>
+</header>
+
+<main id="cards"></main>
+
+<footer class="sticky">
+  <div class="sticky-inner">
+    <span class="progress" id="progress2">已完成 0 / 12</span>
+    <span class="hint">评分自动保存在本浏览器；导出后把 CSV 放回 docs/eval/ 即可</span>
+    <button class="primary" id="export">导出评分 CSV</button>
+  </div>
+</footer>
+
+<script>
+const DATA = {"meta": {"generatedAt": "2026-10-19 17:12", "runId": "paper-20261019-v2", "model": "deepseek-flash"}, "items": [{"articleId": 1, "articleTitle": "小户型收纳的 5 个实用技巧", "sourceTitle": "小户型收纳的 5 个实用技巧", "sourceContent": "很多人觉得家里地方小东西多，其实关键在于把垂直空间用起来。第一，玄关装顶天立地的鞋柜，上层放换季鞋盒，下层放当季常穿的鞋。第二，厨房吊柜下方加一根挂杆，把锅铲、抹布、调料瓶都挂上去，台面立刻清爽。第三，卫生间用窄边置物架替代落地柜，省出走动空间。第四，衣柜里加装分层隔板，T 恤和毛衣竖着叠放，一眼就能找到。第五，床下用带滑轮的收纳箱，换季被褥全部塞进去。这几个办法加起来，六十平的房子也能住得很宽敞。", "sourceLen": 201, "platformKey": "xiaohongshu", "platformName": "小红书", "title": "小户型收纳5招，60平也宽敞", "content": "家里地方小、东西多？其实关键是——把垂直空间用起来！分享5个实用小技巧👇\n\n1️⃣ 玄关做顶天立地鞋柜\n上层放换季鞋盒，下层放当季常穿的鞋，空间一点不浪费。\n\n2️⃣ 厨房吊柜下加一根挂杆\n锅铲、抹布、调料瓶统统挂上去，台面立刻清爽不少。\n\n3️⃣ 卫生间用窄边置物架\n替代落地柜，走动空间就省出来了。\n\n4️⃣ 衣柜加装分层隔板\nT恤和毛衣竖着叠放，一眼就能找到想穿的那件。\n\n5️⃣ 床下放带滑轮的收纳箱\n换季被褥全部塞进去，拿取也方便。\n\n这几个办法加起来，六十平的房子也能住得很宽敞～", "tags": ["#小户型收纳", "#收纳技巧", "#家居整理", "#小户型装修", "#空间利用"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 5, "comment": "风格贴合小红书，emoji和分点排版清晰，核心信息完整保留且无编造，语言通顺易读。"}}, {"articleId": 1, "articleTitle": "小户型收纳的 5 个实用技巧", "sourceTitle": "小户型收纳的 5 个实用技巧", "sourceContent": "很多人觉得家里地方小东西多，其实关键在于把垂直空间用起来。第一，玄关装顶天立地的鞋柜，上层放换季鞋盒，下层放当季常穿的鞋。第二，厨房吊柜下方加一根挂杆，把锅铲、抹布、调料瓶都挂上去，台面立刻清爽。第三，卫生间用窄边置物架替代落地柜，省出走动空间。第四，衣柜里加装分层隔板，T 恤和毛衣竖着叠放，一眼就能找到。第五，床下用带滑轮的收纳箱，换季被褥全部塞进去。这几个办法加起来，六十平的房子也能住得很宽敞。", "sourceLen": 201, "platformKey": "wechat", "platformName": "微信公众号", "title": "小户型收纳的5个实用技巧：把垂直空间用起来", "content": "很多人觉得家里地方小、东西多，其实关键在于把垂直空间用起来。下面这5个办法，都是围绕这一点展开的。\n\n一、玄关：装顶天立地的鞋柜\n上层放换季鞋盒，下层放当季常穿的鞋。这样鞋柜的纵向空间被充分利用，玄关也不会堆得满地是鞋。\n\n二、厨房：吊柜下方加一根挂杆\n把锅铲、抹布、调料瓶都挂上去，台面立刻清爽。常用的东西挂在手边，取用方便，也省出了台面空间。\n\n三、卫生间：用窄边置物架替代落地柜\n落地柜占地，窄边置物架则能省出走动空间，小卫生间用起来更从容。\n\n四、衣柜：加装分层隔板\nT恤和毛衣竖着叠放，一眼就能找到，不用翻乱整摞衣服。\n\n五、床下：用带滑轮的收纳箱\n换季被褥全部塞进去，拉出来就能取，不占额外空间。\n\n这几个办法加起来，六十平的房子也能住得很宽敞。如果你也想改善小户型的收纳，不妨先从玄关鞋柜和厨房挂杆这两处入手，改动小、见效直接。", "tags": [], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 5, "comment": "结构清晰、分点小标题符合公众号阅读习惯，核心信息完整保留且无编造，语言通顺，仅结尾引导语略平淡。"}}, {"articleId": 1, "articleTitle": "小户型收纳的 5 个实用技巧", "sourceTitle": "小户型收纳的 5 个实用技巧", "sourceContent": "很多人觉得家里地方小东西多，其实关键在于把垂直空间用起来。第一，玄关装顶天立地的鞋柜，上层放换季鞋盒，下层放当季常穿的鞋。第二，厨房吊柜下方加一根挂杆，把锅铲、抹布、调料瓶都挂上去，台面立刻清爽。第三，卫生间用窄边置物架替代落地柜，省出走动空间。第四，衣柜里加装分层隔板，T 恤和毛衣竖着叠放，一眼就能找到。第五，床下用带滑轮的收纳箱，换季被褥全部塞进去。这几个办法加起来，六十平的房子也能住得很宽敞。", "sourceLen": 201, "platformKey": "douyin", "platformName": "抖音", "title": "小户型收纳5招，60平也能住得宽敞", "content": "【画面】镜头对准堆满杂物的玄关和台面，快速推近\n【口播】家里地方小、东西多？其实关键就一句话：把垂直空间用起来。今天说5个办法，六十平也能住得宽敞。\n\n【画面】玄关鞋柜，手指从上往下划\n【口播】第一，玄关装顶天立地的鞋柜。上层放换季鞋盒，下层放当季常穿的鞋，一柜到底不浪费。\n\n【画面】厨房吊柜下方挂杆特写，锅铲抹布调料瓶依次入镜\n【口播】第二，厨房吊柜下面加一根挂杆，锅铲、抹布、调料瓶全挂上去，台面立刻清爽。\n\n【画面】卫生间窄边置物架，镜头拉远看走动空间\n【口播】第三，卫生间用窄边置物架替代落地柜，省出走动的空间。\n\n【画面】衣柜分层隔板，T恤毛衣竖着叠放\n【口播】第四，衣柜里加装分层隔板，T恤和毛衣竖着叠放，一眼就能找到。\n\n【画面】床下带滑轮收纳箱拉出，塞满换季被褥\n【口播】第五，床下用带滑轮的收纳箱，换季被褥全部塞进去。\n\n【画面】回到整洁的客厅全景\n【口播】这五个办法加起来，小户型也能住得很宽敞。你家最缺哪一块收纳？", "tags": ["#小户型收纳", "#收纳技巧", "#家居整理", "#空间利用", "#生活小妙招"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 4, "comment": "脚本化分镜与口播贴合抖音短视频节奏，五条技巧完整保留且无编造，结尾互动提问和标签也到位；仅个别口播句可再口语化一点。"}}, {"articleId": 2, "articleTitle": "平价护肤的正确顺序，别再乱涂了", "sourceTitle": "平价护肤的正确顺序，别再乱涂了", "sourceContent": "护肤不是把钱堆在脸上就有效果，顺序错了吸收会差很多。正确的顺序是：洁面、爽肤水、精华、乳液或面霜、防晒。洁面用温水，太热会带走过多油脂。爽肤水用化妆棉轻拍，不要用力摩擦。精华要等前一步吸收后再涂，否则容易搓泥。白天一定要用防晒，这是性价比最高的一步。预算有限的时候，把大部分预算放在精华和防晒上，洁面和爽肤水选成分简单的就好。", "sourceLen": 163, "platformKey": "xiaohongshu", "platformName": "小红书", "title": "护肤顺序涂错了？难怪吸收差", "content": "护肤不是把钱堆在脸上就有效果，顺序错了吸收会差很多😣\n\n今天把正确顺序理清楚，照着做就行👇\n\n1️⃣ 洁面\n用温水，太热会带走过多油脂。\n\n2️⃣ 爽肤水\n用化妆棉轻拍，不要用力摩擦。\n\n3️⃣ 精华\n等前一步吸收后再涂，不然容易搓泥。\n\n4️⃣ 乳液或面霜\n\n5️⃣ 防晒\n白天一定要用，这是性价比最高的一步。\n\n💡预算有限怎么分配？\n把大部分预算放在精华和防晒上，洁面和爽肤水选成分简单的就好。\n\n顺序对了，同样的产品吸收也会好一些，别再乱涂啦～", "tags": ["#护肤顺序", "#平价护肤", "#护肤干货", "#防晒", "#新手护肤"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 4, "comment": "小红书风格适配到位，emoji、分步编号和标签齐全，核心信息完整无编造，仅个别步骤（如乳液或面霜）略显简略，整体通顺易读。"}}, {"articleId": 2, "articleTitle": "平价护肤的正确顺序，别再乱涂了", "sourceTitle": "平价护肤的正确顺序，别再乱涂了", "sourceContent": "护肤不是把钱堆在脸上就有效果，顺序错了吸收会差很多。正确的顺序是：洁面、爽肤水、精华、乳液或面霜、防晒。洁面用温水，太热会带走过多油脂。爽肤水用化妆棉轻拍，不要用力摩擦。精华要等前一步吸收后再涂，否则容易搓泥。白天一定要用防晒，这是性价比最高的一步。预算有限的时候，把大部分预算放在精华和防晒上，洁面和爽肤水选成分简单的就好。", "sourceLen": 163, "platformKey": "wechat", "platformName": "微信公众号", "title": "平价护肤的正确顺序：预算有限时，钱该花在哪几步", "content": "护肤不是把钱堆在脸上就有效果，顺序错了，吸收会差很多。预算有限的时候，更要把每一步用对地方。\n\n一、正确的护肤顺序\n\n洁面、爽肤水、精华、乳液或面霜、防晒，这是日常护肤的基本顺序。\n\n二、每一步的注意点\n\n洁面用温水。水温太热会带走过多油脂，对皮肤并不友好。\n\n爽肤水用化妆棉轻拍，不要用力摩擦。\n\n精华要等前一步吸收后再涂，否则容易搓泥。\n\n白天一定要用防晒。原文把这一步称为性价比最高的一步，也就是说，在预算有限的情况下，它值得优先保证。\n\n三、预算有限时怎么分配\n\n把大部分预算放在精华和防晒上；洁面和爽肤水选成分简单的就好。\n\n四、小结\n\n护肤的效果不只取决于产品价格，也取决于顺序和用法。先把顺序做对，再把预算集中在精华和防晒这两步，是平价护肤更实际的思路。", "tags": [], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 5, "comment": "结构清晰、要点完整，符合公众号阅读习惯，仅标题略长且标签缺失，整体适配良好。"}}, {"articleId": 2, "articleTitle": "平价护肤的正确顺序，别再乱涂了", "sourceTitle": "平价护肤的正确顺序，别再乱涂了", "sourceContent": "护肤不是把钱堆在脸上就有效果，顺序错了吸收会差很多。正确的顺序是：洁面、爽肤水、精华、乳液或面霜、防晒。洁面用温水，太热会带走过多油脂。爽肤水用化妆棉轻拍，不要用力摩擦。精华要等前一步吸收后再涂，否则容易搓泥。白天一定要用防晒，这是性价比最高的一步。预算有限的时候，把大部分预算放在精华和防晒上，洁面和爽肤水选成分简单的就好。", "sourceLen": 163, "platformKey": "douyin", "platformName": "抖音", "title": "平价护肤别乱涂，顺序错吸收差一半", "content": "【画面】镜头怼脸，手里拿着几瓶平价护肤品，语气着急\n【口播】护肤不是把钱堆脸上就有用，顺序错了，吸收真的会差很多！\n\n【画面】手指依次点过桌上的产品，屏幕打出顺序字幕\n【口播】正确顺序就五步：洁面、爽肤水、精华、乳液或面霜、防晒。记住这个顺序，别乱涂。\n\n【画面】水龙头温水冲洗双手，特写水温\n【口播】第一步洁面，用温水。水太热会带走过多油脂，脸越洗越干。\n\n【画面】化妆棉轻拍脸颊，动作放慢\n【口播】第二步爽肤水，用化妆棉轻拍，别用力摩擦，拍进去就行。\n\n【画面】手背演示精华推开，再叠加下一层\n【口播】第三步精华，一定等前一步吸收了再涂，不然容易搓泥，白涂。\n\n【画面】白天出门前涂防晒，特写防晒瓶\n【口播】最后一步防晒，白天一定要用，这是性价比最高的一步。\n\n【画面】把预算分配写在纸上，镜头推近\n【口播】预算有限怎么办？大头放精华和防晒，洁面和爽肤水选成分简单的就好。顺序对了，平价也能用出效果。", "tags": ["#护肤顺序", "#平价护肤", "#护肤干货", "#防晒", "#新手护肤"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 4, "comment": "口播节奏和画面提示很贴合抖音短视频习惯，五步顺序与预算建议完整保留无编造，仅个别句子稍显书面，整体通顺清晰。"}}, {"articleId": 8, "articleTitle": "在家做的减脂餐，一周瘦十斤", "sourceTitle": "在家做的减脂餐，一周瘦十斤", "sourceContent": "跟着我这个食谱吃一周，保证瘦十斤，不运动也能掉秤。早餐两颗水煮蛋加一杯黑咖啡，午餐水煮鸡胸肉配西兰花，晚餐只喝一杯代餐奶昔。这个方法绝对有效，我身边十个朋友试了十个都成功，包治各种平台期，零风险不反弹。", "sourceLen": 101, "platformKey": "xiaohongshu", "platformName": "小红书", "title": "一周减脂餐搭配分享", "content": "最近好多姐妹问我在家怎么安排减脂餐，今天把我自己吃的搭配分享出来～\n\n🥚 早餐：两颗水煮蛋 + 一杯黑咖啡\n简单好操作，早上不用花太多时间。\n\n🍗 午餐：水煮鸡胸肉配西兰花\n蛋白质和蔬菜都照顾到，做法也不复杂。\n\n🥤 晚餐：一杯代餐奶昔\n晚上不想做太多的话，这样安排比较省事。\n\n这就是我一周的搭配思路，三餐结构清晰，做起来也不费劲。每个人的身体情况不一样，掉秤速度和感受也会有差别，大家可以根据自己的状态调整份量，别硬撑～\n\n减脂是个慢慢来的过程，找到自己能坚持的吃法比什么都重要。有在吃减脂餐的姐妹可以一起交流呀～", "tags": ["#减脂餐", "#在家做饭", "#健康饮食", "#减脂日常"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 4, "readability": 5, "comment": "风格和可读性都很贴合小红书，但删掉了“一周瘦十斤”等核心承诺，信息保留度略降，整体是合规且自然的改写。"}}, {"articleId": 8, "articleTitle": "在家做的减脂餐，一周瘦十斤", "sourceTitle": "在家做的减脂餐，一周瘦十斤", "sourceContent": "跟着我这个食谱吃一周，保证瘦十斤，不运动也能掉秤。早餐两颗水煮蛋加一杯黑咖啡，午餐水煮鸡胸肉配西兰花，晚餐只喝一杯代餐奶昔。这个方法绝对有效，我身边十个朋友试了十个都成功，包治各种平台期，零风险不反弹。", "sourceLen": 101, "platformKey": "wechat", "platformName": "微信公众号", "title": "在家做减脂餐的思路：一日三餐这样安排", "content": "很多人想通过调整饮食来控制体重，却不知道从哪下手。这里分享一份简单的在家减脂餐安排思路，供参考。\n\n一、早餐\n两颗水煮蛋，配一杯黑咖啡。做法简单，不需要额外烹饪技巧，适合早上时间紧张的人。\n\n二、午餐\n水煮鸡胸肉配西兰花。鸡胸肉和西兰花都是常见的食材，水煮的做法也比较省事，不需要复杂的调味和烹饪步骤。\n\n三、晚餐\n一杯代餐奶昔。晚餐相对清淡，制作和食用都方便。\n\n需要说明的是，以上只是一份饮食安排示例，每个人的身体情况不同，实际效果因人而异。控制体重是一个循序渐进的过程，建议结合自身状况合理安排饮食，不要盲目追求速度。如果本身有基础疾病或特殊健康状况，调整饮食前最好先咨询专业人士。\n\n总结一下：这份减脂餐的核心就是三餐结构简单、食材常见、做法省事。想尝试的人可以先从其中一餐开始调整，观察身体的适应情况，再决定是否长期坚持。", "tags": [], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 4, "readability": 5, "comment": "风格与结构贴合公众号科普调性，可读性强；但删去了源文“一周瘦十斤”等核心承诺，信息保留略打折扣，整体属合规化改写。"}}, {"articleId": 8, "articleTitle": "在家做的减脂餐，一周瘦十斤", "sourceTitle": "在家做的减脂餐，一周瘦十斤", "sourceContent": "跟着我这个食谱吃一周，保证瘦十斤，不运动也能掉秤。早餐两颗水煮蛋加一杯黑咖啡，午餐水煮鸡胸肉配西兰花，晚餐只喝一杯代餐奶昔。这个方法绝对有效，我身边十个朋友试了十个都成功，包治各种平台期，零风险不反弹。", "sourceLen": 101, "platformKey": "douyin", "platformName": "抖音", "title": "在家做减脂餐，一周饮食安排分享", "content": "【画面】镜头对准厨房台面，摆着水煮蛋、黑咖啡、鸡胸肉和西兰花。\n【口播】在家做减脂餐，一周的三餐安排，今天一次讲清楚。\n\n【画面】早餐食材特写，两颗水煮蛋加一杯黑咖啡。\n【口播】早餐，两颗水煮蛋，配一杯黑咖啡。\n\n【画面】午餐摆盘，水煮鸡胸肉配西兰花。\n【口播】午餐，水煮鸡胸肉配西兰花，做法简单，在家就能搞定。\n\n【画面】晚餐一杯代餐奶昔。\n【口播】晚餐，一杯代餐奶昔。\n\n【画面】主播正面出镜。\n【口播】这就是一周的三餐安排。每个人体质不同，效果因人而异，按自己的情况调整，别硬扛。想试的可以先收藏。", "tags": ["#减脂餐", "#在家做饭", "#饮食安排", "#健康饮食"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 4, "readability": 5, "comment": "脚本化改写符合抖音口播习惯，去除了绝对化承诺并加入风险提示，核心三餐信息保留完整，但“一周瘦十斤”等源文卖点被弱化，信息保留略有折损。"}}, {"articleId": 16, "articleTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceContent": "从 58 平到住得下三口人：我花了三个月做的一次全屋收纳改造\n\n我们家是 58 平的两居室，住着我、爱人和一个五岁的孩子。刚搬进来的时候觉得空间够用，住了两年才发现，东西是会长出来的：孩子的玩具一箱变三箱，换季的衣服把衣柜塞得关不上门，厨房台面上永远堆着瓶瓶罐罐。最夸张的时候，餐桌只有一半能用来吃饭，另一半放着快递盒和没拆的包裹。我试过周末突击整理，但每次都是收拾完两天就乱回去。后来我下定决心做一次彻底的全屋改造，前后花了三个月，踩了不少坑，也总结出一些真正有用的办法。写下来给同样住在小户型里的朋友参考。\n\n第一步不是买收纳盒，而是先做减法。我用了两个周末，把家里所有东西按\"过去一年有没有用过\"分成三类：常用的、偶尔用的、一年都没碰过的。第三类里，真正需要保留的其实很少，大部分是\"以后可能会用\"的幻想。旧衣服、重复的锅具、孩子已经不玩的玩具、各种赠品和数据线，能送人的送人，能捐的捐，剩下的打包放进储物间，给自己一个月的冷静期，一个月后还是没想起它，就处理掉。这一步做完，家里至少空出了三分之一的空间，后面买收纳工具才有意义。\n\n玄关是我最满意的改造。原来只有一个矮鞋柜，鞋子堆到门口。后来换成顶天立地的鞋柜，层板做成可调节的，短靴、运动鞋、孩子的鞋各占一层；底部留空十五厘米，常穿的三双鞋直接踢进去，不用开门；中间留一格放钥匙、口罩和快递刀；最上面放换季鞋盒。柜门内侧贴了一排挂钩，雨伞和购物袋挂在那里，出门顺手就能拿。玄关干净了，整个家的第一印象就不一样。\n\n客厅的电视墙被我改成了整面收纳柜。这里有一个很重要的原则：二八原则。八成的东西藏进柜门里，两成常用的、好看的露在外面。柜子做到顶，最上层放不常用的行李箱和换季被褥；中间是开放格，放书和孩子的绘本；下面是带门的抽屉，装遥控器、药箱、针线盒这些零碎。电视嵌在中间，线路全部走柜体内部，台面上只留一个路由器。以前客厅最乱的是各种线，现在基本看不见。沙发旁边放了一个带盖的边几，里面装毛毯和充电器，台面可以临时放水杯。\n\n厨房的重点是\"台面清空\"。吊柜下面加了一根挂杆，锅铲、汤勺、抹布、调料瓶全部挂上去；抽屉里用分隔盒把筷子、勺子、刀具分开，找东西不用翻；转角装了一个拉篮，原来够不着的深柜终于能用；水槽下面放了可抽拉的置物架，清洁剂和垃圾袋分层放。冰箱侧面贴了磁吸收纳架，保鲜膜、锡纸、厨房纸都有了自己的位置。做完这些，厨房台面第一次露出了完整的台面，做饭的心情都不一样。\n\n卧室的衣柜重新做了分区。最上层放换季被褥，用真空压缩袋抽掉空气，体积能小一半；中间是挂衣区，长衣和短衣分开，短衣下面留出的空间放了两个抽屉柜；最下面是裤架和收纳箱。衣柜里加装了一层感应灯，晚上找衣服不用开大灯。床底下换成了带滑轮的收纳箱，装换季的床品和孩子的旧衣服，拉出来就能拿。床头柜只留一层抽屉，放眼镜、耳塞和一本正在看的书，其他全部清走。\n\n卫生间的空间最小，但改造后的提升最明显。洗手台上面装了镜柜，护肤品、牙刷、剃须刀全部收进去，台面只留洗手液；马桶上方装了窄边置物架，放纸巾和清洁用品；淋浴区用壁龛代替落地架，洗发水沐浴露放进去，地面没有死角；门后挂了拖把夹，拖把和扫帚不再靠在墙上。原来卫生间总是湿漉漉、乱糟糟，现在每次进去都觉得清爽。\n\n儿童房的原则是\"让孩子自己收得回去\"。玩具按类别分箱，箱子放在孩子够得着的高度，每个箱子贴一张图，孩子不识字也能认；绘本用矮书架正面展示，封面朝外，孩子自己会去拿；衣服只挂当季的，抽屉里放每天要穿的那几套，减少选择；墙上装了一块洞洞板，放孩子的小书包和画具。最重要的是，每天晚上睡前留十分钟，和孩子一起把玩具送回箱子，形成习惯以后，房间基本不用我大扫除。\n\n最后是维护。收纳不是一次性的工程，而是一个长期的习惯。我给自己定了两个规则：每周日晚上花十五分钟，把家里快速复位一遍，哪里乱了收哪里；每个月最后一个周末，清理一次冰箱、药箱和孩子的玩具箱，过期的扔掉，不玩的收起来。听起来很麻烦，但真正做起来，十五分钟足够了。最怕的是一次性大整理，然后放任不管，过两周又回到原点。\n\n这三个月里我也踩了不少坑。第一，不要一次性买一堆收纳盒，先量好尺寸再买，我第一批买的盒子有一半塞不进抽屉。第二，透明盒不一定好，放在柜子里的东西用不透明盒更整齐，只有在需要一眼看到内容的地方才用透明盒。第三，抽屉滑轨比盒子重要，抽拉不顺的抽屉最后都会被放弃。第四，标签机不是必需品，手写标签一样好用，关键是统一。第五，不要为了收纳而收纳，有些东西最好的归宿是扔掉，而不是买一个盒子装起来。\n\n改造完成后，我们家没有变大，但住起来宽敞了很多。餐桌终于能完整地用来吃饭，孩子可以在客厅地上摊开积木，厨房台面可以同时放下砧板和备菜盘。最明显的变化是找东西的时间变短了，出门不再翻箱倒柜，做饭不再手忙脚乱。整理这件事，说到底不是为了把家变成样板间，而是让日常生活少一点摩擦。\n\n如果你也在为小户型的收纳发愁，建议先从玄关和厨房这两个高频区域开始，看到效果以后再逐步扩展。想要我整理的完整尺寸清单和购买清单，可以加我微信发你，备注\"收纳\"。", "sourceLen": 2102, "platformKey": "xiaohongshu", "platformName": "小红书", "title": "58平住三口人，三个月收纳改造", "content": "58平两居室住三口人，住了两年东西越堆越多，餐桌只剩一半能吃饭😮‍💨 后来花了三个月做全屋收纳改造，踩了坑也攒了经验，分享给同样住小户型的你～\n\n先说最重要的一步：别急着买收纳盒，先做减法。\n我用两个周末把东西按“过去一年有没有用过”分三类，一年没碰过的基本是“以后可能会用”的幻想。旧衣服、重复锅具、不玩的玩具、赠品和数据线，能送就送、能捐就捐，剩下的打包放储物间冷静一个月，还想不起来就处理掉。这一步做完，家里空出至少三分之一空间。\n\n玄关：换成顶天立地鞋柜，层板可调节，底部留空15厘米放常穿的鞋，中间一格放钥匙口罩，柜门内侧贴挂钩挂雨伞购物袋。\n\n客厅：电视墙做整面到顶收纳柜，记住二八原则——八成藏进柜门，两成常用好看的露出来。线路走柜体内部，台面只留路由器。\n\n厨房：重点是台面清空。吊柜下加挂杆挂锅铲调料，抽屉用分隔盒，转角装拉篮，水槽下放可抽拉置物架，冰箱侧面贴磁吸收纳架。\n\n卧室：衣柜重新分区，换季被褥用真空压缩袋，短衣下方加抽屉柜，装感应灯；床底换带滑轮收纳箱。\n\n卫生间：镜柜收护肤品，马桶上方窄边架，淋浴区用壁龛代替落地架，门后挂拖把夹。\n\n儿童房：原则是“让孩子自己收得回去”。玩具分类装箱放孩子够得着的高度，箱子贴图；绘本封面朝外；睡前留十分钟一起收玩具。\n\n维护比改造更重要：每周日花15分钟快速复位，每月末清理冰箱、药箱和玩具箱。最怕一次大整理然后放任不管。\n\n踩过的坑也说说：\n1. 别一次性买一堆收纳盒，先量尺寸再买\n2. 柜子里的东西用不透明盒更整齐，需要一眼看到才用透明盒\n3. 抽屉滑轨比盒子重要，抽拉不顺的抽屉最后都会被放弃\n4. 标签机不是必需品，手写标签统一就好\n5. 别为了收纳而收纳，有些东西最好的归宿是扔掉\n\n改造完家没变大，但住起来宽敞很多：餐桌能完整吃饭了，孩子能在地上摊开积木，找东西的时间也短了。建议先从玄关和厨房这两个高频区域开始，看到效果再逐步扩展～", "tags": ["#小户型收纳", "#全屋收纳改造", "#收纳技巧", "#58平小家", "#家居整理"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 4, "readability": 5, "comment": "小红书风格到位，分段短、有emoji和标签，核心方法基本保留；但结尾新增了源文没有的坑点4、5和改造后效果描述，属于轻微编造，信息保留度略扣。"}}, {"articleId": 16, "articleTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceContent": "从 58 平到住得下三口人：我花了三个月做的一次全屋收纳改造\n\n我们家是 58 平的两居室，住着我、爱人和一个五岁的孩子。刚搬进来的时候觉得空间够用，住了两年才发现，东西是会长出来的：孩子的玩具一箱变三箱，换季的衣服把衣柜塞得关不上门，厨房台面上永远堆着瓶瓶罐罐。最夸张的时候，餐桌只有一半能用来吃饭，另一半放着快递盒和没拆的包裹。我试过周末突击整理，但每次都是收拾完两天就乱回去。后来我下定决心做一次彻底的全屋改造，前后花了三个月，踩了不少坑，也总结出一些真正有用的办法。写下来给同样住在小户型里的朋友参考。\n\n第一步不是买收纳盒，而是先做减法。我用了两个周末，把家里所有东西按\"过去一年有没有用过\"分成三类：常用的、偶尔用的、一年都没碰过的。第三类里，真正需要保留的其实很少，大部分是\"以后可能会用\"的幻想。旧衣服、重复的锅具、孩子已经不玩的玩具、各种赠品和数据线，能送人的送人，能捐的捐，剩下的打包放进储物间，给自己一个月的冷静期，一个月后还是没想起它，就处理掉。这一步做完，家里至少空出了三分之一的空间，后面买收纳工具才有意义。\n\n玄关是我最满意的改造。原来只有一个矮鞋柜，鞋子堆到门口。后来换成顶天立地的鞋柜，层板做成可调节的，短靴、运动鞋、孩子的鞋各占一层；底部留空十五厘米，常穿的三双鞋直接踢进去，不用开门；中间留一格放钥匙、口罩和快递刀；最上面放换季鞋盒。柜门内侧贴了一排挂钩，雨伞和购物袋挂在那里，出门顺手就能拿。玄关干净了，整个家的第一印象就不一样。\n\n客厅的电视墙被我改成了整面收纳柜。这里有一个很重要的原则：二八原则。八成的东西藏进柜门里，两成常用的、好看的露在外面。柜子做到顶，最上层放不常用的行李箱和换季被褥；中间是开放格，放书和孩子的绘本；下面是带门的抽屉，装遥控器、药箱、针线盒这些零碎。电视嵌在中间，线路全部走柜体内部，台面上只留一个路由器。以前客厅最乱的是各种线，现在基本看不见。沙发旁边放了一个带盖的边几，里面装毛毯和充电器，台面可以临时放水杯。\n\n厨房的重点是\"台面清空\"。吊柜下面加了一根挂杆，锅铲、汤勺、抹布、调料瓶全部挂上去；抽屉里用分隔盒把筷子、勺子、刀具分开，找东西不用翻；转角装了一个拉篮，原来够不着的深柜终于能用；水槽下面放了可抽拉的置物架，清洁剂和垃圾袋分层放。冰箱侧面贴了磁吸收纳架，保鲜膜、锡纸、厨房纸都有了自己的位置。做完这些，厨房台面第一次露出了完整的台面，做饭的心情都不一样。\n\n卧室的衣柜重新做了分区。最上层放换季被褥，用真空压缩袋抽掉空气，体积能小一半；中间是挂衣区，长衣和短衣分开，短衣下面留出的空间放了两个抽屉柜；最下面是裤架和收纳箱。衣柜里加装了一层感应灯，晚上找衣服不用开大灯。床底下换成了带滑轮的收纳箱，装换季的床品和孩子的旧衣服，拉出来就能拿。床头柜只留一层抽屉，放眼镜、耳塞和一本正在看的书，其他全部清走。\n\n卫生间的空间最小，但改造后的提升最明显。洗手台上面装了镜柜，护肤品、牙刷、剃须刀全部收进去，台面只留洗手液；马桶上方装了窄边置物架，放纸巾和清洁用品；淋浴区用壁龛代替落地架，洗发水沐浴露放进去，地面没有死角；门后挂了拖把夹，拖把和扫帚不再靠在墙上。原来卫生间总是湿漉漉、乱糟糟，现在每次进去都觉得清爽。\n\n儿童房的原则是\"让孩子自己收得回去\"。玩具按类别分箱，箱子放在孩子够得着的高度，每个箱子贴一张图，孩子不识字也能认；绘本用矮书架正面展示，封面朝外，孩子自己会去拿；衣服只挂当季的，抽屉里放每天要穿的那几套，减少选择；墙上装了一块洞洞板，放孩子的小书包和画具。最重要的是，每天晚上睡前留十分钟，和孩子一起把玩具送回箱子，形成习惯以后，房间基本不用我大扫除。\n\n最后是维护。收纳不是一次性的工程，而是一个长期的习惯。我给自己定了两个规则：每周日晚上花十五分钟，把家里快速复位一遍，哪里乱了收哪里；每个月最后一个周末，清理一次冰箱、药箱和孩子的玩具箱，过期的扔掉，不玩的收起来。听起来很麻烦，但真正做起来，十五分钟足够了。最怕的是一次性大整理，然后放任不管，过两周又回到原点。\n\n这三个月里我也踩了不少坑。第一，不要一次性买一堆收纳盒，先量好尺寸再买，我第一批买的盒子有一半塞不进抽屉。第二，透明盒不一定好，放在柜子里的东西用不透明盒更整齐，只有在需要一眼看到内容的地方才用透明盒。第三，抽屉滑轨比盒子重要，抽拉不顺的抽屉最后都会被放弃。第四，标签机不是必需品，手写标签一样好用，关键是统一。第五，不要为了收纳而收纳，有些东西最好的归宿是扔掉，而不是买一个盒子装起来。\n\n改造完成后，我们家没有变大，但住起来宽敞了很多。餐桌终于能完整地用来吃饭，孩子可以在客厅地上摊开积木，厨房台面可以同时放下砧板和备菜盘。最明显的变化是找东西的时间变短了，出门不再翻箱倒柜，做饭不再手忙脚乱。整理这件事，说到底不是为了把家变成样板间，而是让日常生活少一点摩擦。\n\n如果你也在为小户型的收纳发愁，建议先从玄关和厨房这两个高频区域开始，看到效果以后再逐步扩展。想要我整理的完整尺寸清单和购买清单，可以加我微信发你，备注\"收纳\"。", "sourceLen": 2102, "platformKey": "wechat", "platformName": "微信公众号", "title": "58平住三口人：三个月全屋收纳改造的5个核心步骤与避坑经验", "content": "我们家是58平的两居室，住着我、爱人和一个五岁的孩子。刚搬进来时觉得空间够用，住了两年才发现东西是会长出来的：孩子的玩具一箱变三箱，换季衣服把衣柜塞得关不上门，厨房台面永远堆着瓶瓶罐罐。最夸张的时候，餐桌只有一半能用来吃饭。我试过周末突击整理，但每次收拾完两天就乱回去。后来我下定决心做一次彻底的全屋改造，前后花了三个月，踩了不少坑，也总结出一些真正有用的办法。\n\n第一步不是买收纳盒，而是先做减法。我用了两个周末，把家里所有东西按“过去一年有没有用过”分成三类：常用的、偶尔用的、一年都没碰过的。第三类里真正需要保留的其实很少，大部分是“以后可能会用”的幻想。旧衣服、重复的锅具、孩子已经不玩的玩具、各种赠品和数据线，能送人的送人，能捐的捐，剩下的打包放进储物间，给自己一个月的冷静期，一个月后还是没想起它，就处理掉。这一步做完，家里至少空出了三分之一的空间，后面买收纳工具才有意义。\n\n玄关是我最满意的改造。原来只有一个矮鞋柜，鞋子堆到门口。后来换成顶天立地的鞋柜，层板做成可调节的，短靴、运动鞋、孩子的鞋各占一层；底部留空十五厘米，常穿的三双鞋直接踢进去，不用开门；中间留一格放钥匙、口罩和快递刀；最上面放换季鞋盒。柜门内侧贴了一排挂钩，雨伞和购物袋挂在那里，出门顺手就能拿。玄关干净了，整个家的第一印象就不一样。\n\n客厅的电视墙被我改成了整面收纳柜。这里有一个很重要的原则：二八原则。八成的东西藏进柜门里，两成常用的、好看的露在外面。柜子做到顶，最上层放不常用的行李箱和换季被褥；中间是开放格，放书和孩子的绘本；下面是带门的抽屉，装遥控器、药箱、针线盒这些零碎。电视嵌在中间，线路全部走柜体内部，台面上只留一个路由器。沙发旁边放了一个带盖的边几，里面装毛毯和充电器，台面可以临时放水杯。\n\n厨房的重点是“台面清空”。吊柜下面加了一根挂杆，锅铲、汤勺、抹布、调料瓶全部挂上去；抽屉里用分隔盒把筷子、勺子、刀具分开，找东西不用翻；转角装了一个拉篮，原来够不着的深柜终于能用；水槽下面放了可抽拉的置物架，清洁剂和垃圾袋分层放。冰箱侧面贴了磁吸收纳架，保鲜膜、锡纸、厨房纸都有了自己的位置。做完这些，厨房台面第一次露出了完整的台面，做饭的心情都不一样。\n\n卧室的衣柜重新做了分区。最上层放换季被褥，用真空压缩袋抽掉空气，体积能小一半；中间是挂衣区，长衣和短衣分开，短衣下面留出的空间放了两个抽屉柜；最下面是裤架和收纳箱。衣柜里加装了一层感应灯，晚上找衣服不用开大灯。床底下换成了带滑轮的收纳箱，装换季的床品和孩子的旧衣服，拉出来就能拿。床头柜只留一层抽屉，放眼镜、耳塞和一本正在看的书，其他全部清走。\n\n卫生间的空间最小，但改造后的提升最明显。洗手台上面装了镜柜，护肤品、牙刷、剃须刀全部收进去，台面只留洗手液；马桶上方装了窄边置物架，放纸巾和清洁用品；淋浴区用壁龛代替落地架，洗发水沐浴露放进去，地面没有死角；门后挂了拖把夹，拖把和扫帚不再靠在墙上。原来卫生间总是湿漉漉、乱糟糟，现在每次进去都觉得清爽。\n\n儿童房的原则是“让孩子自己收得回去”。玩具按类别分箱，箱子放在孩子够得着的高度，每个箱子贴一张图，孩子不识字也能认；绘本用矮书架正面展示，封面朝外，孩子自己会去拿；衣服只挂当季的，抽屉里放每天要穿的那几套，减少选择；墙上装了一块洞洞板，放孩子的小书包和画具。最重要的是，每天晚上睡前留十分钟，和孩子一起把玩具送回箱子，形成习惯以后，房间基本不用我大扫除。\n\n最后是维护。收纳不是一次性的工程，而是一个长期的习惯。我给自己定了两个规则：每周日晚上花十五分钟，把家里快速复位一遍，哪里乱了收哪里；每个月最后一个周末，清理一次冰箱、药箱和孩子的玩具箱，过期的扔掉，不玩的收起来。听起来很麻烦，但真正做起来，十五分钟足够了。最怕的是一次性大整理，然后放任不管，过两周又回到原点。\n\n这三个月里我也踩了不少坑。第一，不要一次性买一堆收纳盒，先量好尺寸再买，我第一批买的盒子有一半塞不进抽屉。第二，透明盒不一定好，放在柜子里的东西用不透明盒更整齐，只有在需要一眼看到内容的地方才用透明盒。第三，抽屉滑轨比盒子重要，抽拉不顺的抽屉最后都会被放弃。第四，标签机不是必需品，手写标签一样好用，关键是统一。第五，不要为了收纳而收纳，有些东西最好的归宿是扔掉，而不是买一个盒子装起来。\n\n改造完成后，我们家没有变大，但住起来宽敞了很多。餐桌终于能完整地用来吃饭，孩子可以在客厅地上摊开积木，厨房台面可以同时放下砧板和备菜盘。最明显的变化是找东西的时间变短了，出门不再翻箱倒柜，做饭不再手忙脚乱。整理这件事，说到底不是为了把家变成样板间，而是让日常生活少一点摩擦。\n\n如果你也在为小户型的收纳发愁，建议先从玄关和厨房这两个高频区域开始，看到效果以后再逐步扩展。", "tags": [], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 5, "readability": 4, "comment": "标题更聚焦、结构清晰，正文几乎完整保留原文信息且语句通顺，符合公众号长文阅读习惯；仅结尾略有截断，整体适配良好。"}}, {"articleId": 16, "articleTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceTitle": "从 58 平到住得下三口人：三个月全屋收纳改造（长文测试）", "sourceContent": "从 58 平到住得下三口人：我花了三个月做的一次全屋收纳改造\n\n我们家是 58 平的两居室，住着我、爱人和一个五岁的孩子。刚搬进来的时候觉得空间够用，住了两年才发现，东西是会长出来的：孩子的玩具一箱变三箱，换季的衣服把衣柜塞得关不上门，厨房台面上永远堆着瓶瓶罐罐。最夸张的时候，餐桌只有一半能用来吃饭，另一半放着快递盒和没拆的包裹。我试过周末突击整理，但每次都是收拾完两天就乱回去。后来我下定决心做一次彻底的全屋改造，前后花了三个月，踩了不少坑，也总结出一些真正有用的办法。写下来给同样住在小户型里的朋友参考。\n\n第一步不是买收纳盒，而是先做减法。我用了两个周末，把家里所有东西按\"过去一年有没有用过\"分成三类：常用的、偶尔用的、一年都没碰过的。第三类里，真正需要保留的其实很少，大部分是\"以后可能会用\"的幻想。旧衣服、重复的锅具、孩子已经不玩的玩具、各种赠品和数据线，能送人的送人，能捐的捐，剩下的打包放进储物间，给自己一个月的冷静期，一个月后还是没想起它，就处理掉。这一步做完，家里至少空出了三分之一的空间，后面买收纳工具才有意义。\n\n玄关是我最满意的改造。原来只有一个矮鞋柜，鞋子堆到门口。后来换成顶天立地的鞋柜，层板做成可调节的，短靴、运动鞋、孩子的鞋各占一层；底部留空十五厘米，常穿的三双鞋直接踢进去，不用开门；中间留一格放钥匙、口罩和快递刀；最上面放换季鞋盒。柜门内侧贴了一排挂钩，雨伞和购物袋挂在那里，出门顺手就能拿。玄关干净了，整个家的第一印象就不一样。\n\n客厅的电视墙被我改成了整面收纳柜。这里有一个很重要的原则：二八原则。八成的东西藏进柜门里，两成常用的、好看的露在外面。柜子做到顶，最上层放不常用的行李箱和换季被褥；中间是开放格，放书和孩子的绘本；下面是带门的抽屉，装遥控器、药箱、针线盒这些零碎。电视嵌在中间，线路全部走柜体内部，台面上只留一个路由器。以前客厅最乱的是各种线，现在基本看不见。沙发旁边放了一个带盖的边几，里面装毛毯和充电器，台面可以临时放水杯。\n\n厨房的重点是\"台面清空\"。吊柜下面加了一根挂杆，锅铲、汤勺、抹布、调料瓶全部挂上去；抽屉里用分隔盒把筷子、勺子、刀具分开，找东西不用翻；转角装了一个拉篮，原来够不着的深柜终于能用；水槽下面放了可抽拉的置物架，清洁剂和垃圾袋分层放。冰箱侧面贴了磁吸收纳架，保鲜膜、锡纸、厨房纸都有了自己的位置。做完这些，厨房台面第一次露出了完整的台面，做饭的心情都不一样。\n\n卧室的衣柜重新做了分区。最上层放换季被褥，用真空压缩袋抽掉空气，体积能小一半；中间是挂衣区，长衣和短衣分开，短衣下面留出的空间放了两个抽屉柜；最下面是裤架和收纳箱。衣柜里加装了一层感应灯，晚上找衣服不用开大灯。床底下换成了带滑轮的收纳箱，装换季的床品和孩子的旧衣服，拉出来就能拿。床头柜只留一层抽屉，放眼镜、耳塞和一本正在看的书，其他全部清走。\n\n卫生间的空间最小，但改造后的提升最明显。洗手台上面装了镜柜，护肤品、牙刷、剃须刀全部收进去，台面只留洗手液；马桶上方装了窄边置物架，放纸巾和清洁用品；淋浴区用壁龛代替落地架，洗发水沐浴露放进去，地面没有死角；门后挂了拖把夹，拖把和扫帚不再靠在墙上。原来卫生间总是湿漉漉、乱糟糟，现在每次进去都觉得清爽。\n\n儿童房的原则是\"让孩子自己收得回去\"。玩具按类别分箱，箱子放在孩子够得着的高度，每个箱子贴一张图，孩子不识字也能认；绘本用矮书架正面展示，封面朝外，孩子自己会去拿；衣服只挂当季的，抽屉里放每天要穿的那几套，减少选择；墙上装了一块洞洞板，放孩子的小书包和画具。最重要的是，每天晚上睡前留十分钟，和孩子一起把玩具送回箱子，形成习惯以后，房间基本不用我大扫除。\n\n最后是维护。收纳不是一次性的工程，而是一个长期的习惯。我给自己定了两个规则：每周日晚上花十五分钟，把家里快速复位一遍，哪里乱了收哪里；每个月最后一个周末，清理一次冰箱、药箱和孩子的玩具箱，过期的扔掉，不玩的收起来。听起来很麻烦，但真正做起来，十五分钟足够了。最怕的是一次性大整理，然后放任不管，过两周又回到原点。\n\n这三个月里我也踩了不少坑。第一，不要一次性买一堆收纳盒，先量好尺寸再买，我第一批买的盒子有一半塞不进抽屉。第二，透明盒不一定好，放在柜子里的东西用不透明盒更整齐，只有在需要一眼看到内容的地方才用透明盒。第三，抽屉滑轨比盒子重要，抽拉不顺的抽屉最后都会被放弃。第四，标签机不是必需品，手写标签一样好用，关键是统一。第五，不要为了收纳而收纳，有些东西最好的归宿是扔掉，而不是买一个盒子装起来。\n\n改造完成后，我们家没有变大，但住起来宽敞了很多。餐桌终于能完整地用来吃饭，孩子可以在客厅地上摊开积木，厨房台面可以同时放下砧板和备菜盘。最明显的变化是找东西的时间变短了，出门不再翻箱倒柜，做饭不再手忙脚乱。整理这件事，说到底不是为了把家变成样板间，而是让日常生活少一点摩擦。\n\n如果你也在为小户型的收纳发愁，建议先从玄关和厨房这两个高频区域开始，看到效果以后再逐步扩展。想要我整理的完整尺寸清单和购买清单，可以加我微信发你，备注\"收纳\"。", "sourceLen": 2102, "platformKey": "douyin", "platformName": "抖音", "title": "58平住三口人，三个月全屋收纳改造的5个关键做法", "content": "【画面】镜头对准堆满快递盒的餐桌，只留一半能吃饭，画面快速切到改造后清爽的客厅。\n【口播】58平住三口人，东西越住越多，餐桌只剩一半能吃饭。我花三个月做了全屋收纳改造，今天讲5个真正有用的做法。\n\n【画面】衣柜、玩具箱、厨房台面依次闪过，最后定格在空出来的储物箱。\n【口播】第一步不是买收纳盒，是先做减法。按过去一年有没有用过分成三类，一年没碰过的，能送就送、能捐就捐，剩下的给自己一个月冷静期，一个月后还想不起来就处理掉。这一步做完，家里空出三分之一。\n\n【画面】镜头从顶天立地的鞋柜底部扫到中间钥匙格，再切到柜门内侧挂钩。\n【口播】玄关换成顶天立地鞋柜，层板可调，短靴、运动鞋、孩子的鞋各占一层；底部留空十五厘米，常穿的三双鞋直接踢进去；中间一格放钥匙、口罩和快递刀；柜门内侧贴挂钩，挂雨伞和购物袋，出门顺手拿。\n\n【画面】电视墙整面柜子，柜门关上，只留中间开放格放书和绘本。\n【口播】客厅电视墙做成整面收纳柜，记住二八原则：八成藏进柜门，两成常用好看的露在外面。柜子做到顶，最上层放行李箱和换季被褥，中间开放格放书和绘本，下面带门抽屉装遥控器、药箱这些零碎，线路全走柜体内部。\n\n【画面】厨房台面清空，镜头扫过挂杆上的锅铲调料、抽屉分隔盒、转角拉篮。\n【口播】厨房重点是台面清空。吊柜下加挂杆，锅铲、汤勺、抹布、调料瓶全挂上去；抽屉用分隔盒把筷子、勺子、刀具分开；转角装拉篮，深柜终于够得着；水槽下放可抽拉置物架，清洁剂分层放。台面第一次完整露出来。\n\n【画面】孩子把玩具按图贴分类放回箱子，睡前十分钟亲子收拾的画面。\n【口播】儿童房的原则是让孩子自己收得回去。玩具按类别分箱，放在孩子够得着的高度，每个箱子贴一张图；绘本用矮书架封面朝外；每天晚上睡前留十分钟，和孩子一起把玩具送回箱子，形成习惯后基本不用大扫除。\n\n【画面】镜头对准周日晚上十五分钟快速复位的计时器，最后切回整洁的餐桌。\n【口播】最后是维护，每周日晚上花十五分钟快速复位，每月最后一个周末清理冰箱、药箱和玩具箱。收纳不是一次性工程，是长期习惯。建议先从玄关和厨房这两个高频区域开始，看到效果再逐步扩展。", "tags": ["#小户型收纳", "#全屋收纳改造", "#收纳技巧", "#58平两居", "#家庭收纳"], "formatPassed": true, "formatIssues": [], "complianceText": "通过", "llm": {"style": 4, "retention": 4, "readability": 5, "comment": "口播脚本节奏紧凑、画面感强，符合抖音短视频表达；核心做法保留完整，但压缩掉了卧室、卫生间、踩坑经验等源文内容，信息有所取舍。"}}]};
+const STORAGE_KEY = 'adaptation-human-review-v1';
+let state = {};
+try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { state = {}; }
+
+function h(tag, cls, text) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined && text !== null) el.textContent = text;
+  return el;
+}
+
+function itemKey(it) { return it.articleId + ':' + it.platformKey; }
+
+function current(it) {
+  return state[itemKey(it)] || { style: null, retention: null, readability: null, comment: '' };
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  updateProgress();
+}
+
+function complete(it) {
+  const s = current(it);
+  return s.style && s.retention && s.readability;
+}
+
+function updateProgress() {
+  const done = DATA.items.filter(complete).length;
+  const total = DATA.items.length;
+  document.getElementById('progress').textContent = '已完成 ' + done + ' / ' + total;
+  document.getElementById('progress2').textContent = '已完成 ' + done + ' / ' + total;
+}
+
+function makeRadioRow(it, field, label, low, high) {
+  const row = h('div', 'score-row');
+  row.appendChild(h('span', 'score-label', label));
+  const group = h('div', 'radio-group');
+  for (let v = 1; v <= 5; v++) {
+    const lab = h('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = field + '-' + itemKey(it);
+    input.value = String(v);
+    const s = current(it);
+    if (s[field] === v) input.checked = true;
+    input.addEventListener('change', () => {
+      const next = current(it);
+      next[field] = v;
+      state[itemKey(it)] = next;
+      save();
+    });
+    lab.appendChild(input);
+    lab.appendChild(document.createTextNode(String(v)));
+    group.appendChild(lab);
+  }
+  row.appendChild(group);
+  row.appendChild(h('span', 'anchor', low + ' · ' + high));
+  return row;
+}
+
+function render() {
+  const root = document.getElementById('cards');
+  root.innerHTML = '';
+  DATA.items.forEach((it, idx) => {
+    const s = current(it);
+    const card = h('section', 'card');
+    card.id = 'card-' + itemKey(it);
+
+    const head = h('div', 'card-head');
+    const left = h('div');
+    const title = h('div', 'card-title');
+    title.appendChild(document.createTextNode((idx + 1) + '/' + DATA.items.length + '  '));
+    title.appendChild(document.createTextNode(it.articleTitle || ('稿件 #' + it.articleId)));
+    title.appendChild(h('span', 'badge', it.platformName));
+    left.appendChild(title);
+    head.appendChild(left);
+
+    const status = h('div', 'status');
+    const f = h('span', it.formatPassed ? 'ok' : 'warn',
+      it.formatPassed ? '格式自检：通过' : '格式自检：未通过');
+    status.appendChild(f);
+    status.appendChild(document.createTextNode(' '));
+    status.appendChild(h('span', 'ok', '合规预检：' + (it.complianceText || '未判定')));
+    head.appendChild(status);
+    card.appendChild(head);
+
+    const grid = h('div', 'grid');
+
+    const p1 = h('div', 'pane');
+    p1.appendChild(h('h3', null, '原文（' + (it.sourceLen || 0) + ' 字）'));
+    p1.appendChild(h('div', 'content', it.sourceContent || '（原文未嵌入，请对照源文）'));
+    grid.appendChild(p1);
+
+    const p2 = h('div', 'pane');
+    p2.appendChild(h('h3', null, '适配结果：' + it.platformName));
+    p2.appendChild(h('div', 'adapted-title', it.title || '（无独立标题）'));
+    p2.appendChild(h('div', 'content adapted', it.content || ''));
+    const tagList = h('div', 'tag-list');
+    (it.tags || []).forEach(t => tagList.appendChild(h('span', null, t)));
+    if (!(it.tags || []).length) tagList.appendChild(h('span', null, '无话题标签'));
+    p2.appendChild(tagList);
+    if (it.formatIssues && it.formatIssues.length) {
+      const issue = h('div', 'hint', '格式问题：' + it.formatIssues.join('；'));
+      p2.appendChild(issue);
+    }
+    grid.appendChild(p2);
+    card.appendChild(grid);
+
+    const scores = h('div', 'scores');
+    scores.appendChild(makeRadioRow(it, 'style', '风格符合度', '1 完全不像', '5 很像'));
+    scores.appendChild(makeRadioRow(it, 'retention', '信息保留度', '1 大量丢失/编造', '5 完整准确'));
+    scores.appendChild(makeRadioRow(it, 'readability', '可读性', '1 很难读', '5 流畅'));
+    const ta = document.createElement('textarea');
+    ta.placeholder = '点评（可选）：哪里扣分？比如"标题太夸张""漏了第 3 步"';
+    ta.value = s.comment || '';
+    ta.addEventListener('input', () => {
+      const next = current(it);
+      next.comment = ta.value;
+      state[itemKey(it)] = next;
+      save();
+    });
+    scores.appendChild(ta);
+    card.appendChild(scores);
+
+    if (it.llm && !it.llm.error) {
+      const llm = h('div', 'llm hidden',
+        'LLM 评分：风格 ' + it.llm.style + ' / 保留 ' + it.llm.retention + ' / 可读 ' + it.llm.readability +
+        (it.llm.comment ? '｜' + it.llm.comment : ''));
+      llm.dataset.llm = '1';
+      card.appendChild(llm);
+    }
+
+    root.appendChild(card);
+  });
+  updateProgress();
+  syncLlmVisibility();
+}
+
+function syncLlmVisibility() {
+  const show = document.getElementById('showLlm').checked;
+  document.querySelectorAll('[data-llm]').forEach(el => {
+    el.classList.toggle('hidden', !show);
+  });
+}
+
+function csvCell(v) {
+  const s = String(v === null || v === undefined ? '' : v);
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function exportCsv() {
+  const missing = DATA.items.filter(it => !complete(it));
+  if (missing.length) {
+    alert('还有 ' + missing.length + ' 条没有打完整（三项都要选）。已跳到第一条未完成。');
+    const el = document.getElementById('card-' + itemKey(missing[0]));
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const header = ['稿件ID', '稿件标题', '目标平台', '风格_人工(1-5)', '保留_人工(1-5)',
+    '可读_人工(1-5)', '人工点评', '评分时间'];
+  const now = new Date().toLocaleString();
+  const rows = DATA.items.map(it => {
+    const s = current(it);
+    return [it.articleId, it.articleTitle, it.platformName,
+      s.style, s.retention, s.readability, s.comment || '', now];
+  });
+  const csv = '\ufeff' + [header, ...rows]
+    .map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'adaptation-human-scores.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+document.getElementById('showLlm').addEventListener('change', syncLlmVisibility);
+document.getElementById('export').addEventListener('click', exportCsv);
+document.getElementById('clear').addEventListener('click', () => {
+  if (!confirm('确定清空所有已填评分吗？')) return;
+  state = {};
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

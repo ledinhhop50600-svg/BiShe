@@ -227,9 +227,9 @@ async function runDemo() {
 
       <el-alert type="info" :closable="false" class="block">
         <template #title>
-          LLM 评分只作参考：分数集中在 4-5，区分度低。人工评分表在
-          <code>docs/eval/adaptation-human-sheet.csv</code>，填完后计算与 LLM 评分的相关性。
-          详细报告：<code>docs/eval/adaptation-eval.md</code>。
+          LLM 评分只作参考：分数集中在 4-5，区分度低。人工评分请双击打开
+          <code>docs/eval/adaptation-review.html</code>（原文 vs 适配结果 + 点选 1-5 分 + 导出 CSV），
+          填完后计算与 LLM 评分的相关性。详细报告：<code>docs/eval/adaptation-eval.md</code>。
         </template>
       </el-alert>
     </el-card>
@@ -288,6 +288,9 @@ python tools/experiment_compare.py --rounds 1 --out docs/实验-对比实验-v4-
 
 # 适配质量评估（4 篇 × 3 平台；写入 docs/eval/）
 python tools/eval_adaptation.py --run-id paper --out-dir docs/eval
+
+# 生成人工评分页面（原文 vs 适配结果）
+python tools/make_human_review.py
 
 # 人机协同 / 账号 / 改稿验证
 python tools/verify_stage7.py

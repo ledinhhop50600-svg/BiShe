@@ -234,6 +234,9 @@ def main():
             row = {
                 "articleId": aid,
                 "articleTitle": article.get("title"),
+                # 原文一并保存：人工评分页面需要"先看原文、再看适配结果"
+                "sourceTitle": article.get("title"),
+                "sourceContent": article.get("content"),
                 "sourceLen": len(article.get("content") or ""),
                 "platformKey": pkey,
                 "platformName": p["platformName"],
