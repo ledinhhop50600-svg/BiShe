@@ -11,16 +11,8 @@ import Layout from '@/layout/index.vue'
  *    守卫会拿它跟当前用户的权限列表比对，没有权限就跳 403；
  *  - 侧边栏的菜单项完全来自后端返回的菜单树，前端没有写死。
  *
- * 后续阶段的页面（内容管理、审核中心等）本阶段先用统一的占位页，避免点菜单出现空白页。
+ * 所有页面均已实现；路由与权限的对应关系是静态资产，菜单是否可见由后端下发。
  */
-const underConstruction = () => import('@/views/common/UnderConstruction.vue')
-
-/** 生成"后续阶段实现"的占位路由 */
-const todo = (path, title, perms) => ({
-  path,
-  component: underConstruction,
-  meta: { title, perms, todo: true },
-})
 
 const routes = [
   {
@@ -113,8 +105,12 @@ const routes = [
         component: () => import('@/views/audit/record/index.vue'),
         meta: { title: '审核记录', perms: 'audit:record' },
       },
-      // 审核规则库在阶段 8 实现
-      todo('audit/rule', '审核规则库', 'audit:rule'),
+      {
+        path: 'audit/rule',
+        name: 'AuditRule',
+        component: () => import('@/views/audit/rule/index.vue'),
+        meta: { title: '审核规则库', perms: 'audit:rule' },
+      },
 
       // ---------- 平台管理与创作中心 ----------
       {

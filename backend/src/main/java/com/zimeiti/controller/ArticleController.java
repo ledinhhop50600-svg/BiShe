@@ -6,6 +6,7 @@ import com.zimeiti.common.PageResult;
 import com.zimeiti.common.Result;
 import com.zimeiti.dto.ArticleReviewDTO;
 import com.zimeiti.dto.ArticleSaveDTO;
+import com.zimeiti.dto.PrecheckDTO;
 import com.zimeiti.service.ArticleService;
 import com.zimeiti.service.AuditAgentService;
 import com.zimeiti.service.AuditRecordService;
@@ -135,6 +136,16 @@ public class ArticleController {
     public Result<Void> offline(@PathVariable Long id) {
         articleService.offline(id);
         return Result.ok();
+    }
+
+    /**
+     * 发布前预检：不要求稿件已保存，不落库，只返回风险提示与修改建议。
+     * <p>与正式审核共用同一套规则与判定逻辑，保证"预检说通过、审核说违规"不会自相矛盾。
+     */
+    @PostMapping("/precheck")
+    @SaCheckPermission(value = {"creator:submit", "article:list"}, mode = SaMode.OR)
+    public Result<Map<String, Object>> precheck(@Valid @RequestBody PrecheckDTO dto) {
+        return Result.ok(auditAgentService.precheck(dto.getTitle(), dto.getContent()));
     }
 
     /**

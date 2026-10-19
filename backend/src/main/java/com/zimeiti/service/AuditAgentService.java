@@ -15,6 +15,7 @@ import com.zimeiti.mapper.BizArticleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,7 +28,7 @@ import java.util.UUID;
  * <p>它承担三件职责：
  *  1. **组装上下文**：稿件内容 + 目标平台约束 + 本次可用规则（智能体不连数据库，上下文必须由这里给齐）；
  *  2. **降级**：智能体不可用时不阻断业务，返回带 {@code agentFailed=true} 的结果，由界面提示转人工；
- *  3. **统一出口**：阶段 5/6 的预检、举报复审都走这个方法，只是 triggerType 不同。
+ *  3. **统一出口**：正式审核、发布前预检都走这里，只是 triggerType 与是否落库不同。
  */
 @Slf4j
 @Service
@@ -44,7 +45,7 @@ public class AuditAgentService {
     private final AuditRecordService auditRecordService;
 
     /**
-     * 对一篇稿件调用智能体审核。
+     * 对一篇已存在的稿件调用智能体审核。
      *
      * @param triggerType 契约里的触发场景：POST_AUDIT / PRE_CHECK / REPORT_REVIEW
      */
@@ -54,10 +55,59 @@ public class AuditAgentService {
             throw new BizException("稿件不存在");
         }
 
+        Map<String, Object> request = buildRequest(article.getId(), article.getTitle(),
+                article.getContent(), triggerType);
+        String contentHash = ContentHash.of(article.getTitle(), article.getContent());
+
+        try {
+            Map<String, Object> result = agentClient.audit(request);
+            // 正式审核（POST_AUDIT）必须留痕；发布前预检只是给创作者的提示，不写入审核记录，
+            // 否则每点一次"预检"就多一条记录，会污染工作台与统计。
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+                Long recordId = auditRecordService.saveAgentResult(
+                        article.getId(), triggerType, null, contentHash, result, false, null);
+                result.put("auditRecordId", recordId);
+            }
+            return result;
+        } catch (AgentClient.AgentUnavailableException e) {
+            log.warn("智能体不可用，已降级为人工审核：{}", e.getMessage());
+            Map<String, Object> degraded = degraded(e.getMessage(), "智能体服务不可用，请改为人工审核");
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+                Long recordId = auditRecordService.saveAgentResult(
+                        article.getId(), triggerType, null, contentHash, Map.of(), true, e.getMessage());
+                degraded.put("auditRecordId", recordId);
+            }
+            return degraded;
+        }
+    }
+
+    /**
+     * 发布前预检：不要求稿件已保存，不落库，只给创作者提示。
+     * <p>为什么单独提供：创作者常常先写一段就想看看风险，此时还没有稿件 id；
+     * 若先存草稿再预检，会把用户的编辑动作变成一次保存（已发布稿件还会触发重审），体验不对。
+     */
+    public Map<String, Object> precheck(String title, String content) {
+        if (!StringUtils.hasText(title) && !StringUtils.hasText(content)) {
+            throw new BizException(400, "请先填写标题或正文");
+        }
+        Map<String, Object> request = buildRequest(0L, title, content, "PRE_CHECK");
+        try {
+            return agentClient.audit(request);
+        } catch (AgentClient.AgentUnavailableException e) {
+            log.warn("预检时智能体不可用：{}", e.getMessage());
+            return degraded(e.getMessage(), "智能体服务不可用，请先按敏感词提示自查");
+        }
+    }
+
+    /**
+     * 组装契约请求：本地平台约束 + 本次可用规则（通用 + 本平台专属）+ 敏感词。
+     * 智能体不连数据库，这些上下文必须由主系统给齐。
+     */
+    private Map<String, Object> buildRequest(Long articleId, String title, String content,
+                                             String triggerType) {
         AuditPlatform platform = platformMapper.selectOne(
                 Wrappers.<AuditPlatform>lambdaQuery().eq(AuditPlatform::getPlatformKey, LOCAL_PLATFORM_KEY));
 
-        // 本次可用规则 = 通用规则（platform_id 为空）+ 该平台的专属规则，且只取启用的
         Long platformId = platform == null ? null : platform.getId();
         List<AuditRule> rules = ruleMapper.selectList(Wrappers.<AuditRule>lambdaQuery()
                 .eq(AuditRule::getEnabled, 1)
@@ -71,42 +121,25 @@ public class AuditAgentService {
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("requestId", UUID.randomUUID().toString());
-        request.put("articleId", article.getId());
+        request.put("articleId", articleId);
         request.put("triggerType", triggerType);
         request.put("targetPlatformKey", LOCAL_PLATFORM_KEY);
-        request.put("title", article.getTitle());
-        request.put("content", article.getContent() == null ? "" : article.getContent());
+        request.put("title", title == null ? "" : title);
+        request.put("content", content == null ? "" : content);
         request.put("platform", toPlatformMap(platform));
         request.put("rules", toRuleList(rules));
         // 敏感词库随请求下发：智能体用它做"词面兜底"的关键词来源。
         // 规则里的示例词常是完整短语，正文写法常有出入；短词（"加我微信"）能兜住这种情况。
         request.put("sensitiveWords", toWordList());
+        return request;
+    }
 
-        String contentHash = ContentHash.of(article.getTitle(), article.getContent());
-        try {
-            Map<String, Object> result = agentClient.audit(request);
-            // 正式审核（POST_AUDIT）必须留痕；发布前预检只是给创作者的提示，不写入审核记录，
-            // 否则每点一次"预检"就多一条记录，会污染工作台与统计。
-            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
-                Long recordId = auditRecordService.saveAgentResult(
-                        article.getId(), triggerType, null, contentHash, result, false, null);
-                result.put("auditRecordId", recordId);
-            }
-            return result;
-        } catch (AgentClient.AgentUnavailableException e) {
-            // 降级：不抛异常、不阻断业务，把"智能体不可用"如实告诉界面
-            log.warn("智能体不可用，已降级为人工审核：{}", e.getMessage());
-            Map<String, Object> degraded = new LinkedHashMap<>();
-            degraded.put("agentFailed", true);
-            degraded.put("error", e.getMessage());
-            degraded.put("message", "智能体服务不可用，请改为人工审核");
-            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
-                Long recordId = auditRecordService.saveAgentResult(
-                        article.getId(), triggerType, null, contentHash, Map.of(), true, e.getMessage());
-                degraded.put("auditRecordId", recordId);
-            }
-            return degraded;
-        }
+    private Map<String, Object> degraded(String error, String message) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("agentFailed", true);
+        out.put("error", error);
+        out.put("message", message);
+        return out;
     }
 
     private Map<String, Object> toPlatformMap(AuditPlatform p) {

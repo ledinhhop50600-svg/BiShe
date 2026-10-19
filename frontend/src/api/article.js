@@ -35,6 +35,14 @@ export function submitArticle(id) {
   return request.post(`/article/${id}/submit`)
 }
 
+/**
+ * 发布前预检（智能体）：只传标题/正文，不需要已保存，不落库。
+ * <p>后端审核客户端 30 秒、失败重试一次，这里放宽到 90 秒。
+ */
+export function precheckArticle(title, content) {
+  return request.post('/article/precheck', { title, content }, { timeout: 90000 })
+}
+
 /** 撤回申请 */
 export function withdrawArticle(id) {
   return request.post(`/article/${id}/withdraw`)

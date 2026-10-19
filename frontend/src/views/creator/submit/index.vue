@@ -2,9 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createArticle, getArticle, submitArticle, updateArticle } from '@/api/article'
+import { createArticle, getArticle, precheckArticle, submitArticle, updateArticle } from '@/api/article'
 import { listCategories, listTags } from '@/api/category'
-import { checkText } from '@/api/sensitive'
+import { riskText, riskType } from '@/utils/articleStatus'
 
 /**
  * 投稿页（创作者）：写稿、存草稿、发布前检查、提交审核。
@@ -19,7 +19,7 @@ const tags = ref([])
 const formRef = ref()
 const saving = ref(false)
 const checking = ref(false)
-const sensitive = ref(null)
+const precheck = ref(null)
 const articleStatus = ref(null)
 
 const form = reactive({
@@ -132,7 +132,8 @@ async function runCheck() {
   }
   checking.value = true
   try {
-    sensitive.value = await checkText(`${form.title}\n${form.content}`)
+    // 智能体预检：不要求先保存，也不落库；与正式审核共用同一套规则
+    precheck.value = await precheckArticle(form.title, form.content)
   } finally {
     checking.value = false
   }
@@ -197,27 +198,44 @@ async function runCheck() {
       </el-form>
     </el-card>
 
-    <el-card v-if="sensitive" shadow="never" class="block">
+    <el-card v-if="precheck" shadow="never" class="block">
       <template #header>
-        <b>发布前检查结果</b>
-        <span class="hint">当前为敏感词基线，后续会升级为智能体检查</span>
+        <div class="card-header">
+          <b>发布前预检（智能体）</b>
+          <span class="hint">仅提示，不阻断发布；结论不落库</span>
+        </div>
       </template>
-      <div class="line">
-        结论：
-        <el-tag :type="sensitive.passed ? 'success' : 'warning'" size="small">
-          {{ sensitive.passed ? '未命中敏感词' : '命中敏感词' }}
-        </el-tag>
-        <span class="msg">{{ sensitive.message }}</span>
-      </div>
-      <div v-if="!sensitive.passed" class="line">
-        命中词：
-        <el-tag v-for="w in sensitive.matched" :key="w" type="danger" size="small" class="tag">{{ w }}</el-tag>
-      </div>
-      <el-alert type="info" :closable="false" class="block">
-        <template #title>
-          关键词匹配只能告诉你"有哪个词"，说不出"为什么违规、该怎么改"。智能体上线后会给出分级判定、判定理由与具体修改建议。
-        </template>
-      </el-alert>
+
+      <template v-if="precheck.agentFailed">
+        <el-alert type="warning" :closable="false">
+          <template #title>{{ precheck.message || '智能体服务不可用，请稍后重试或直接提交人工审核' }}</template>
+        </el-alert>
+      </template>
+
+      <template v-else>
+        <div class="line">
+          结论：
+          <el-tag :type="riskType(precheck.riskLevel)" size="small">{{ riskText(precheck.riskLevel) }}</el-tag>
+          <span class="msg">{{ precheck.reason }}</span>
+        </div>
+        <div v-if="precheck.hitRules?.length" class="line">
+          命中规则：
+          <el-tag v-for="r in precheck.hitRules" :key="r.code" type="warning" size="small" class="tag">
+            {{ r.code }}
+          </el-tag>
+        </div>
+        <div v-for="(v, idx) in precheck.violations" :key="idx" class="violation">
+          <el-tag type="danger" size="small">{{ v.issue }}</el-tag>
+          <span class="fragment">「{{ v.fragment }}」</span>
+          <div class="suggestion">修改建议：{{ v.suggestion }}</div>
+        </div>
+        <div v-if="precheck.suggestion" class="suggestion">处置建议：{{ precheck.suggestion }}</div>
+        <el-alert type="info" :closable="false" class="block">
+          <template #title>
+            预检只用于修改参考；正式结论以提交后审核员的初审 + 终审为准。
+          </template>
+        </el-alert>
+      </template>
     </el-card>
   </div>
 </template>
@@ -250,5 +268,26 @@ async function runCheck() {
 
 .tag {
   margin-right: 4px;
+}
+
+.violation {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.fragment {
+  color: #b91c1c;
+  margin-left: 6px;
+}
+
+.suggestion {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.7;
 }
 </style>
