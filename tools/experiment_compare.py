@@ -1,29 +1,22 @@
-"""对比实验 v2：在统一评测集上比较四个方案。
+"""对比实验 v3：多轮运行 + 关键词定位实验组。
 
-样本来自 tools/eval_set/samples.json（由 build_eval_set.py 生成）：
-  - 自建样本：按「区分度层级」设计（easy / trap / blind / pair / multi / long / clean）
-  - 公开数据集 ToxiCN 抽样（辱骂/仇恨），只参与二分类指标（公开集没有四级标签）
+与 v2 的区别：
+- `--rounds N`：同一配置跑 N 轮，报告均值 ± 标准差（单轮结果会被波动带偏）
+- `--localize`：额外加一组「关键词定位」实验（E），验证"只把命中关键词的段落送模型"能否降本
+- `--out PATH`：报告输出路径（用于不同模型 / 不同配置分别出报告）
 
-四个方案：
-  A 关键词规则      —— 敏感词库匹配（传统基线）
-  B 纯大模型        —— 不提供任何规则
-  C RAG + 大模型    —— 混合检索召回规则（当前实现）
-  D 全量规则 + 大模型 —— 上界参照
+四个基础方案：
+  A 关键词规则 / B 纯大模型 / C RAG+大模型 / D 全量规则+大模型
 
-指标（从粗到细，专门用来拉开差距）：
-  1. 整体二分类（阻断 / 放行）准确率、精确率、召回率、F1
-  2. **分层的准确率矩阵** —— 哪个方案在哪类样本上掉链子
-  3. **四级精确匹配**（0/1/2/3 完全一致，仅自建样本）—— 区分"疑似 vs 违规"这类细微差别
-  4. **规则召回**（是否引用了应命中的规则编号，仅自建违规样本）
-  5. 违规片段有效率（片段是否为原文真实文字）
-  6. 成本与耗时
-
-用法：python tools/experiment_compare.py
-前置：后端 8080、智能体 8001（真实模型）均在运行。
-成本：52 条 × 3 个调用模型的方案 ≈ 156 次调用，约 1 元。
+用法：
+    python tools/experiment_compare.py --rounds 3
+    python tools/experiment_compare.py --localize --rounds 1 --out docs/实验-定位消融.md
+    ZIMEITI_AGENT=http://localhost:8011 python tools/experiment_compare.py --rounds 1 --out docs/实验-模型对比-pro.md
 """
 
+import argparse
 import json
+import math
 import os
 import time
 import urllib.error
@@ -35,7 +28,6 @@ AGENT = os.environ.get("ZIMEITI_AGENT", "http://localhost:8001").rstrip("/")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLES_PATH = os.path.join(HERE, "eval_set", "samples.json")
-REPORT = os.path.join(HERE, "..", "docs", "实验-对比实验-v2.md")
 
 PRICE_INPUT_PER_M = 1.0
 PRICE_OUTPUT_PER_M = 4.0
@@ -52,9 +44,6 @@ TIER_LABELS = {
 }
 
 
-# ======================================================================
-# HTTP
-# ======================================================================
 def http_json(url, method="GET", body=None, headers=None, timeout=120):
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
@@ -79,45 +68,35 @@ def login(username, password="123456"):
     return ((body or {}).get("data") or {}).get("tokenValue")
 
 
-# ======================================================================
-# 方案
-# ======================================================================
 def run_keyword(sample, words):
     text = f"{sample.get('title', '')}\n{sample.get('content', '')}"
     hits = [w for w in words if w["word"] in text]
     max_level = max([w["level"] for w in hits], default=0)
-    return {
-        "riskLevel": max_level if hits else 0,
-        "fragments": [w["word"] for w in hits],
-        "hit_rules": [],
-        "promptTokens": 0,
-        "completionTokens": 0,
-        "durationMs": 0,
-        "trace": f"命中 {len(hits)} 个词",
-    }
+    return {"riskLevel": max_level if hits else 0, "fragments": [w["word"] for w in hits],
+            "hit_rules": [], "promptTokens": 0, "completionTokens": 0, "durationMs": 0,
+            "trace": f"命中 {len(hits)} 个词"}
 
 
-def run_agent(sample, rules, platform, use_rag):
+def run_agent(sample, rules, platform, use_rag, localize=False, words=None):
     req = {
-        "requestId": str(uuid.uuid4()),
-        "articleId": 0,
-        "triggerType": "POST_AUDIT",
+        "requestId": str(uuid.uuid4()), "articleId": 0, "triggerType": "POST_AUDIT",
         "targetPlatformKey": "local",
-        "title": sample.get("title", ""),
-        "content": sample.get("content", ""),
-        "platform": platform,
-        "rules": rules,
-        "useRag": use_rag,
+        "title": sample.get("title", ""), "content": sample.get("content", ""),
+        "platform": platform, "rules": rules, "useRag": use_rag,
+        # 敏感词库随请求下发（真实系统也这么做），作为词面关键词来源
+        "sensitiveWords": [{"word": w["word"], "level": w.get("level"), "category": w.get("category")}
+                           for w in (words or [])],
     }
+    if localize:
+        req["localize"] = True
     t0 = time.time()
     status, body = http_json(f"{AGENT}/api/agent/audit", "POST", req)
     elapsed = int((time.time() - t0) * 1000)
     if status != 200:
         return {"error": f"HTTP {status}: {str(body)[:120]}", "durationMs": elapsed}
-
     usage = body.get("usage") or {}
-    retrieve = next((t.get("output") for t in body.get("trace") or []
-                     if t.get("action") in ("retrieve_rules", "retrieve_rules_failed")), "")
+    trace_txt = " / ".join(t.get("output", "") for t in (body.get("trace") or [])
+                           if t.get("action") in ("retrieve_rules", "localize"))
     return {
         "riskLevel": body.get("riskLevel"),
         "fragments": [v.get("fragment") for v in body.get("violations") or []],
@@ -125,13 +104,10 @@ def run_agent(sample, rules, platform, use_rag):
         "promptTokens": usage.get("promptTokens", 0),
         "completionTokens": usage.get("completionTokens", 0),
         "durationMs": body.get("durationMs", elapsed),
-        "trace": retrieve,
+        "trace": trace_txt,
     }
 
 
-# ======================================================================
-# 指标
-# ======================================================================
 def binary_metrics(rows):
     tp = fp = tn = fn = 0
     for r in rows:
@@ -145,36 +121,30 @@ def binary_metrics(rows):
             tn += 1
         else:
             fn += 1
-    total = tp + fp + tn + fn
-    acc = (tp + tn) / total if total else 0
+    n = tp + fp + tn + fn
+    acc = (tp + tn) / n if n else 0
     prec = tp / (tp + fp) if (tp + fp) else 0
     rec = tp / (tp + fn) if (tp + fn) else 0
     f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0
-    return {"tp": tp, "fp": fp, "tn": tn, "fn": fn, "n": total,
+    return {"tp": tp, "fp": fp, "tn": tn, "fn": fn, "n": n,
             "accuracy": acc, "precision": prec, "recall": rec, "f1": f1}
 
 
-def exact_metrics(rows, samples_by_id):
-    """四级精确匹配：只看非公开样本（公开集没有四级标签）。"""
+def exact_rate(rows, samples_by_id):
     rows = [r for r in rows if not samples_by_id[r["id"]].get("binary_only")]
     if not rows:
         return None
-    ok = sum(1 for r in rows if r["pred_level"] == samples_by_id[r["id"]]["expected_level"])
-    return {"ok": ok, "n": len(rows), "rate": ok / len(rows)}
+    return sum(1 for r in rows if r["pred_level"] == samples_by_id[r["id"]]["expected_level"]) / len(rows)
 
 
 def rule_recall(rows, samples_by_id):
-    """规则召回：应命中的规则里，被引用了多少（只统计期望规则非空的样本）。"""
     ratios = []
     for r in rows:
         expected = set(samples_by_id[r["id"]].get("expected_rules") or [])
         if not expected:
             continue
-        cited = set(r.get("hit_rules") or [])
-        ratios.append(len(expected & cited) / len(expected))
-    if not ratios:
-        return None
-    return {"mean": sum(ratios) / len(ratios), "n": len(ratios)}
+        ratios.append(len(expected & set(r.get("hit_rules") or [])) / len(expected))
+    return sum(ratios) / len(ratios) if ratios else None
 
 
 def fragment_validity(rows, samples_by_id):
@@ -183,187 +153,218 @@ def fragment_validity(rows, samples_by_id):
         s = samples_by_id[r["id"]]
         hay = (s.get("title") or "") + "\n" + (s.get("content") or "")
         for frag in r.get("fragments") or []:
-            if not frag:
-                continue
-            total += 1
-            if frag in hay:
-                valid += 1
+            if frag:
+                total += 1
+                valid += 1 if frag in hay else 0
     return valid, total
 
 
-# ======================================================================
-# 主流程
-# ======================================================================
+def mean_std(vals):
+    if not vals:
+        return 0.0, 0.0
+    m = sum(vals) / len(vals)
+    if len(vals) == 1:
+        return m, 0.0
+    var = sum((v - m) ** 2 for v in vals) / len(vals)
+    return m, math.sqrt(var)
+
+
+def tier_accuracy(rows, tier):
+    sub = [r for r in rows if r["tier"] == tier]
+    if not sub:
+        return None
+    ok = sum(1 for r in sub if not r["error"] and
+             ((r["pred_level"] or 0) >= 2) == (r["expected_level"] >= 2))
+    return ok / len(sub)
+
+
 def main():
-    if not os.path.exists(SAMPLES_PATH):
-        print("❌ 未找到评测集，请先运行 python tools/eval_set/build_eval_set.py")
-        return 1
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--rounds", type=int, default=1)
+    parser.add_argument("--out", default=os.path.join(HERE, "..", "docs", "实验-对比实验-v3.md"))
+    parser.add_argument("--localize", action="store_true")
+    parser.add_argument("--min-len", type=int, default=0,
+                        help="只跑正文长度 >= 该值的样本（定位实验只关心长文）")
+    args = parser.parse_args()
+    rounds = max(1, args.rounds)
+
     with open(SAMPLES_PATH, encoding="utf-8") as f:
         data = json.load(f)
-    samples = data["samples"]
+    samples = [s for s in data["samples"] if len(s.get("content") or "") >= args.min_len]
     samples_by_id = {s["id"]: s for s in samples}
 
-    token = login("admin")   # 取敏感词库需要管理员权限
+    token = login("admin")
     if not token:
         print("❌ 登录失败")
         return 1
     headers = {"satoken": token}
-
     _, wb = http_json(f"{JAVA}/api/sensitive/page?pageNum=1&pageSize=300", headers=headers)
     words = ((wb or {}).get("data") or {}).get("records") or []
-    if not words:
-        print("❌ 敏感词库为空（或接口无权限），方案 A 无效")
-        return 1
-
     _, rb = http_json(f"{JAVA}/api/rule/list", headers=headers)
-    rules = [{
-        "code": r.get("ruleCode"), "name": r.get("ruleName"), "category": r.get("category"),
-        "content": r.get("ruleContent"), "source": r.get("source"),
-        "suggestedLevel": r.get("suggestedLevel"),
-    } for r in ((rb or {}).get("data") or [])]
-    if not rules:
-        print("❌ 规则库为空")
+    raw_rules = (rb or {}).get("data") or []
+    _, pb0 = http_json(f"{JAVA}/api/platform/list", headers=headers)
+    local0 = next((p for p in ((pb0 or {}).get("data") or []) if p.get("platformKey") == "local"), None) or {}
+    local_id = local0.get("id")
+    # 只取"通用规则 + 本平台专属规则"，与主系统实际下发的一致
+    # （不做过滤的话会把小红书/微博的专属规则也发过去，等于让模型按别的平台标准判）
+    rules = [{"code": r.get("ruleCode"), "name": r.get("ruleName"), "category": r.get("category"),
+              "content": r.get("ruleContent"), "source": r.get("source"),
+              "suggestedLevel": r.get("suggestedLevel")}
+             for r in raw_rules
+             if r.get("platformId") is None or r.get("platformId") == local_id]
+    if not words or not rules:
+        print("❌ 敏感词或规则为空")
         return 1
-
     _, pb = http_json(f"{JAVA}/api/platform/list", headers=headers)
-    local = next((p for p in ((pb or {}).get("data") or [])
-                  if p.get("platformKey") == "local"), None) or {}
-    platform = {
-        "platformKey": "local", "platformName": "本平台",
-        "titleMaxLen": local.get("titleMaxLen", 60),
-        "contentMaxLen": local.get("contentMaxLen", 5000),
-        "tagRule": local.get("tagRule"), "styleDesc": local.get("styleDesc"),
-    }
-
-    print(f"评测集：{len(samples)} 条（自建 {data['stats']['self_built']} + 公开 {data['stats']['public']}）"
-          f" | 规则 {len(rules)} 条 | 敏感词 {len(words)} 个")
+    local = next((p for p in ((pb or {}).get("data") or []) if p.get("platformKey") == "local"), None) or {}
+    platform = {"platformKey": "local", "platformName": "本平台",
+                "titleMaxLen": local.get("titleMaxLen", 60),
+                "contentMaxLen": local.get("contentMaxLen", 5000),
+                "tagRule": local.get("tagRule"), "styleDesc": local.get("styleDesc")}
 
     schemes = [
         ("A 关键词规则", lambda s: run_keyword(s, words)),
-        ("B 纯大模型", lambda s: run_agent(s, [], platform, False)),
-        ("C RAG+大模型", lambda s: run_agent(s, rules, platform, True)),
-        ("D 全量规则+大模型", lambda s: run_agent(s, rules, platform, False)),
+        ("B 纯大模型", lambda s: run_agent(s, [], platform, False, words=words)),
+        ("C RAG+大模型", lambda s: run_agent(s, rules, platform, True, words=words)),
+        ("D 全量规则+大模型", lambda s: run_agent(s, rules, platform, False, words=words)),
     ]
+    if args.localize:
+        schemes.append(("E RAG+关键词定位",
+                        lambda s: run_agent(s, rules, platform, True, localize=True, words=words)))
 
-    results = {}
-    for name, fn in schemes:
-        print(f"\n=== {name} ===")
-        rows = []
-        for s in samples:
-            r = fn(s)
-            rows.append({
-                "id": s["id"], "tier": s["tier"], "expected_level": s["expected_level"],
-                "pred_level": r.get("riskLevel"), "fragments": r.get("fragments") or [],
-                "hit_rules": r.get("hit_rules") or [], "error": r.get("error"),
-                "promptTokens": r.get("promptTokens", 0), "completionTokens": r.get("completionTokens", 0),
-                "durationMs": r.get("durationMs", 0), "trace": r.get("trace", ""),
-            })
-            ok = "错误" if r.get("error") else (
-                "✓" if ((r.get("riskLevel") or 0) >= 2) == (s["expected_level"] >= 2) else "✗")
-            print(f"  {ok:3s} {s['id']:24s} 期望{s['expected_level']} 实际{r.get('riskLevel')} "
-                  f"| {r.get('durationMs', 0)}ms")
-        results[name] = rows
+    print(f"评测集 {len(samples)} 条 | 规则 {len(rules)} | 敏感词 {len(words)} | "
+          f"轮数 {rounds} | 方案 {len(schemes)} | Agent={AGENT}")
 
-    # ---------------- 生成报告 ----------------
-    lines = []
-    lines.append("# 对比实验记录 v2（统一评测集）\n")
-    lines.append(f"- 实验时间：{time.strftime('%Y-%m-%d %H:%M')}")
-    lines.append(f"- 评测集：**{len(samples)} 条** = 自建 {data['stats']['self_built']} + 公开数据集 {data['stats']['public']}")
-    tiers = {}
-    for s in samples:
-        tiers[s["tier"]] = tiers.get(s["tier"], 0) + 1
-    lines.append("- 分层构成：" + "、".join(f"{TIER_LABELS.get(k, k)} {v} 条" for k, v in tiers.items()))
-    lines.append(f"- 规则库 {len(rules)} 条 | 敏感词 {len(words)} 个 | 模型 deepseek-flash | 检索 bge-m3(top_k=6, 混合检索)")
-    lines.append(f"- 计价：输入 {PRICE_INPUT_PER_M} 元/百万、输出 {PRICE_OUTPUT_PER_M} 元/百万（空闲时段）")
-    lines.append("- 二分类口径：`riskLevel >= 2` 视为阻断；调用失败按「未阻断」计入（保守口径）\n")
+    all_rounds = {name: [] for name, _ in schemes}
+    for rnd in range(1, rounds + 1):
+        print(f"\n########## 第 {rnd}/{rounds} 轮 ##########")
+        for name, fn in schemes:
+            print(f"--- {name} ---")
+            rows = []
+            for s in samples:
+                r = fn(s)
+                rows.append({"id": s["id"], "tier": s["tier"],
+                             "expected_level": s["expected_level"],
+                             "pred_level": r.get("riskLevel"), "fragments": r.get("fragments") or [],
+                             "hit_rules": r.get("hit_rules") or [], "error": r.get("error"),
+                             "promptTokens": r.get("promptTokens", 0),
+                             "completionTokens": r.get("completionTokens", 0),
+                             "durationMs": r.get("durationMs", 0), "trace": r.get("trace", "")})
+            all_rounds[name].append(rows)
+            m = binary_metrics(rows)
+            print(f"    准确率={m['accuracy']:.0%} F1={m['f1']:.2f} "
+                  f"TP/FP/TN/FN={m['tp']}/{m['fp']}/{m['tn']}/{m['fn']}")
 
-    lines.append("## 一、总体结果（二分类）\n")
-    lines.append("| 方案 | 准确率 | 精确率 | 召回率 | F1 | TP/FP/TN/FN | 错误 | 平均耗时 | 平均 token | 成本/条 |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    # ---------------- 报告 ----------------
+    L = []
+    L.append("# 对比实验记录 v3（多轮 + 定位实验）\n")
+    L.append(f"- 实验时间：{time.strftime('%Y-%m-%d %H:%M')}")
+    L.append(f"- 评测集：{len(samples)} 条（自建 {data['stats']['self_built']} + 公开 {data['stats']['public']}）")
+    L.append(f"- Agent：{AGENT} | 规则 {len(rules)} 条 | 敏感词 {len(words)} 个 | 轮数 {rounds}")
+    L.append("- 模型 deepseek-flash（思考模式关闭）| 检索 bge-m3 top_k=6（元规则固定带上）")
+    L.append(f"- 计价：输入 {PRICE_INPUT_PER_M} 元/百万、输出 {PRICE_OUTPUT_PER_M} 元/百万（空闲时段）")
+    L.append("- 二分类口径：`riskLevel >= 2` 视为阻断；调用失败按未阻断计入（保守口径）\n")
+
+    L.append(f"## 一、总体结果（{rounds} 轮均值 ± 标准差）\n")
+    L.append("| 方案 | 准确率 | F1 | 平均 token | 成本/条 | 平均耗时 | 错误数 |")
+    L.append("|---|---|---|---|---|---|---|")
     for name, _ in schemes:
-        rows = results[name]
-        m = binary_metrics(rows)
-        errs = sum(1 for r in rows if r["error"])
-        ok_rows = [r for r in rows if not r["error"]]
-        avg_ms = sum(r["durationMs"] for r in ok_rows) // max(1, len(ok_rows))
-        avg_tok = sum(r["promptTokens"] + r["completionTokens"] for r in rows) // max(1, len(rows))
-        cost = sum(r["promptTokens"] * PRICE_INPUT_PER_M + r["completionTokens"] * PRICE_OUTPUT_PER_M
-                   for r in rows) / max(1, len(rows)) / 1_000_000
-        lines.append(f"| {name} | {m['accuracy']:.0%} | {m['precision']:.0%} | {m['recall']:.0%} | "
-                     f"{m['f1']:.2f} | {m['tp']}/{m['fp']}/{m['tn']}/{m['fn']} | {errs} | {avg_ms}ms | {avg_tok} | {cost:.5f} 元 |")
+        accs, f1s, toks, costs, durs, errs = [], [], [], [], [], []
+        for rows in all_rounds[name]:
+            m = binary_metrics(rows)
+            accs.append(m["accuracy"])
+            f1s.append(m["f1"])
+            toks.append(sum(r["promptTokens"] + r["completionTokens"] for r in rows) / len(rows))
+            costs.append(sum(r["promptTokens"] * PRICE_INPUT_PER_M + r["completionTokens"] * PRICE_OUTPUT_PER_M
+                             for r in rows) / len(rows) / 1_000_000)
+            durs.append(sum(r["durationMs"] for r in rows if not r["error"]) /
+                        max(1, sum(1 for r in rows if not r["error"])))
+            errs.append(sum(1 for r in rows if r["error"]))
+        am, asd = mean_std(accs)
+        fm, fsd = mean_std(f1s)
+        tm, _ = mean_std(toks)
+        cm, _ = mean_std(costs)
+        dm, _ = mean_std(durs)
+        if rounds > 1:
+            L.append(f"| {name} | {am:.0%} ± {asd:.1%} | {fm:.2f} ± {fsd:.2f} | {tm:.0f} | "
+                     f"{cm:.5f} 元 | {dm:.0f}ms | {max(errs)} |")
+        else:
+            L.append(f"| {name} | {am:.0%} | {fm:.2f} | {tm:.0f} | {cm:.5f} 元 | {dm:.0f}ms | {max(errs)} |")
 
-    lines.append("\n## 二、分层准确率矩阵（关键：看方案在哪类样本上掉链子）\n")
-    lines.append("| 层级 | " + " | ".join(n for n, _ in schemes) + " |")
-    lines.append("|---|" + "---|" * len(schemes))
+    L.append("\n## 二、分层准确率（各轮均值）\n")
+    L.append("| 层级 | " + " | ".join(n.split(" ")[0] for n, _ in schemes) + " |")
+    L.append("|---|" + "---|" * len(schemes))
     for tier in ["easy", "trap", "blind", "pair", "multi", "long", "clean", "public"]:
         cells = []
         for name, _ in schemes:
-            rows = [r for r in results[name] if r["tier"] == tier]
-            if not rows:
-                cells.append("-")
-                continue
-            okn = sum(1 for r in rows if not r["error"] and
-                      ((r["pred_level"] or 0) >= 2) == (r["expected_level"] >= 2))
-            cells.append(f"{okn}/{len(rows)}")
-        lines.append(f"| {TIER_LABELS.get(tier, tier)} | " + " | ".join(cells) + " |")
+            vals = [tier_accuracy(rows, tier) for rows in all_rounds[name]]
+            vals = [v for v in vals if v is not None]
+            cells.append(f"{sum(vals) / len(vals):.0%}" if vals else "-")
+        L.append(f"| {TIER_LABELS.get(tier, tier)} | " + " | ".join(cells) + " |")
 
-    lines.append("\n## 三、四级精确匹配（仅自建样本）\n")
-    lines.append("判定等级与期望等级完全一致（0/1/2/3），比只看「阻断与否」更严格 —— 可以区分「疑似」与「违规」的混淆。\n")
-    lines.append("| 方案 | 完全一致 / 总数 | 一致率 |")
-    lines.append("|---|---|---|")
+    last = {name: rows[-1] for name, rows in all_rounds.items()}
+
+    L.append("\n## 三、四级精确匹配（最后一轮，仅自建样本）\n")
+    L.append("| 方案 | 一致率 |")
+    L.append("|---|---|")
     for name, _ in schemes:
-        e = exact_metrics(results[name], samples_by_id)
-        if e:
-            lines.append(f"| {name} | {e['ok']}/{e['n']} | {e['rate']:.0%} |")
+        e = exact_rate(last[name], samples_by_id)
+        L.append(f"| {name} | {e:.0%} |" if e is not None else f"| {name} | - |")
 
-    lines.append("\n## 四、规则召回（仅自建、期望规则非空的样本）\n")
-    lines.append("「应命中的规则」中被实际引用了多少 —— 检验判定依据是否完整，而不只是结论对不对。\n")
-    lines.append("| 方案 | 规则召回率 | 样本数 |")
-    lines.append("|---|---|---|")
+    L.append("\n## 四、规则召回（最后一轮，仅自建、期望规则非空）\n")
+    L.append("| 方案 | 召回率 |")
+    L.append("|---|---|")
     for name, _ in schemes:
-        rr = rule_recall(results[name], samples_by_id)
-        lines.append(f"| {name} | {rr['mean']:.0%} | {rr['n']} |" if rr else f"| {name} | - | - |")
+        rr = rule_recall(last[name], samples_by_id)
+        L.append(f"| {name} | {rr:.0%} |" if rr is not None else f"| {name} | - |")
 
-    lines.append("\n## 五、违规片段有效率\n")
-    lines.append("| 方案 | 有效片段 / 总片段 | 有效率 |")
-    lines.append("|---|---|---|")
+    L.append("\n## 五、违规片段有效率（最后一轮）\n")
+    L.append("| 方案 | 有效/总数 | 有效率 |")
+    L.append("|---|---|---|")
     for name, _ in schemes:
-        valid, total = fragment_validity(results[name], samples_by_id)
-        lines.append(f"| {name} | {valid}/{total} | {(valid / total):.0%} |" if total else f"| {name} | 0/0 | - |")
+        v, t = fragment_validity(last[name], samples_by_id)
+        L.append(f"| {name} | {v}/{t} | {(v / t):.0%} |" if t else f"| {name} | 0/0 | - |")
 
-    lines.append("\n## 六、逐样本结果\n")
-    lines.append("> 单元格含义：`✓等级` 正确、`✗等级` 错误、`错误` 调用失败。\n")
-    lines.append("| 样本 | 层级 | 期望 | " + " | ".join(n.split(" ")[0] for n, _ in schemes) + " |")
-    lines.append("|---|---|---|" + "---|" * len(schemes))
+    L.append("\n## 六、逐样本结果（最后一轮）\n")
+    L.append("> `✓等级` 判定正确，`✗等级` 判定错误，`错误` 调用失败。\n")
+    L.append("| 样本 | 层级 | 期望 | " + " | ".join(n.split(" ")[0] for n, _ in schemes) + " |")
+    L.append("|---|---|---|" + "---|" * len(schemes))
     for s in samples:
         cells = []
         for name, _ in schemes:
-            row = next(r for r in results[name] if r["id"] == s["id"])
+            row = next(r for r in last[name] if r["id"] == s["id"])
             if row["error"]:
                 cells.append("错误")
             else:
                 mark = "✓" if ((row["pred_level"] or 0) >= 2) == (s["expected_level"] >= 2) else "✗"
                 cells.append(f"{mark}{row['pred_level']}")
-        lines.append(f"| {s['id']} | {s['tier']} | {s['expected_level']} | " + " | ".join(cells) + " |")
+        L.append(f"| {s['id']} | {s['tier']} | {s['expected_level']} | " + " | ".join(cells) + " |")
 
-    lines.append("\n## 七、检索明细（方案 C，仅自建违规样本）\n")
-    lines.append("| 样本 | 召回轨迹 |")
-    lines.append("|---|---|")
-    for s in samples:
-        if s.get("binary_only") or not (s.get("expected_rules") or []):
-            continue
-        row = next(r for r in results["C RAG+大模型"] if r["id"] == s["id"])
-        lines.append(f"| {s['id']} | {(row['trace'] or '').replace('|', '/')} |")
+    if args.localize:
+        L.append("\n## 七、关键词定位效果（E vs C）\n")
+        L.append("E 方案 = 检索 + 关键词定位：先把长文聚焦到命中规则示例词的段落（含前后各一段），再送给模型；\n"
+                 "一段都没命中时自动回退全文。用来验证「先定位再判断」能否降本、代价是什么。\n")
+        L.append("| 样本 | 定位说明（E） | C 等级 | E 等级 |")
+        L.append("|---|---|---|---|")
+        for s in samples:
+            if len(s.get("content") or "") < 300:
+                continue
+            e_row = next(r for r in last["E RAG+关键词定位"] if r["id"] == s["id"])
+            c_row = next(r for r in last["C RAG+大模型"] if r["id"] == s["id"])
+            loc = next((t for t in (e_row["trace"] or "").split(" / ") if t.startswith("分 ")), "")
+            L.append(f"| {s['id']} | {loc} | {c_row['pred_level']} | {e_row['pred_level']} |")
 
-    with open(REPORT, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    print(f"\n✅ 报告已写入 {os.path.abspath(REPORT)}")
+    with open(args.out, "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
+    print(f"\n✅ 报告：{os.path.abspath(args.out)}")
 
     print("\n=== 汇总 ===")
     for name, _ in schemes:
-        m = binary_metrics(results[name])
-        print(f"{name:18s} 准确率={m['accuracy']:.0%} F1={m['f1']:.2f} "
-              f"TP/FP/TN/FN={m['tp']}/{m['fp']}/{m['tn']}/{m['fn']}")
+        accs = [binary_metrics(rows)["accuracy"] for rows in all_rounds[name]]
+        f1s = [binary_metrics(rows)["f1"] for rows in all_rounds[name]]
+        am, asd = mean_std(accs)
+        fm, fsd = mean_std(f1s)
+        print(f"{name:22s} 准确率 {am:.0%} ± {asd:.1%} | F1 {fm:.2f} ± {fsd:.2f}")
     return 0
 
 

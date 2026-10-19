@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.zimeiti.common.BizException;
 import com.zimeiti.entity.AuditPlatform;
 import com.zimeiti.entity.AuditRule;
+import com.zimeiti.entity.AuditSensitiveWord;
 import com.zimeiti.entity.BizArticle;
 import com.zimeiti.mapper.AuditPlatformMapper;
 import com.zimeiti.mapper.AuditRuleMapper;
+import com.zimeiti.mapper.AuditSensitiveWordMapper;
 import com.zimeiti.mapper.BizArticleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class AuditAgentService {
     private final BizArticleMapper articleMapper;
     private final AuditRuleMapper ruleMapper;
     private final AuditPlatformMapper platformMapper;
+    private final AuditSensitiveWordMapper wordMapper;
     private final AgentClient agentClient;
 
     /**
@@ -72,6 +75,9 @@ public class AuditAgentService {
         request.put("content", article.getContent() == null ? "" : article.getContent());
         request.put("platform", toPlatformMap(platform));
         request.put("rules", toRuleList(rules));
+        // 敏感词库随请求下发：智能体用它做"词面兜底"的关键词来源。
+        // 规则里的示例词常是完整短语，正文写法常有出入；短词（"加我微信"）能兜住这种情况。
+        request.put("sensitiveWords", toWordList());
 
         try {
             return agentClient.audit(request);
@@ -110,6 +116,20 @@ public class AuditAgentService {
             m.put("content", r.getRuleContent());
             m.put("source", r.getSource());
             m.put("suggestedLevel", r.getSuggestedLevel());
+            list.add(m);
+        }
+        return list;
+    }
+
+    /** 启用的敏感词，作为智能体的词面关键词来源 */
+    private List<Map<String, Object>> toWordList() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (AuditSensitiveWord w : wordMapper.selectList(
+                Wrappers.<AuditSensitiveWord>lambdaQuery().eq(AuditSensitiveWord::getEnabled, 1))) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("word", w.getWord());
+            m.put("level", w.getLevel());
+            m.put("category", w.getCategory());
             list.add(m);
         }
         return list;

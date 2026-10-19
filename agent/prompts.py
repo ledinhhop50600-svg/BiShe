@@ -43,15 +43,16 @@ SYSTEM_PROMPT = """你是一名专业的内容审核员，负责判断自媒体�
 """
 
 
-def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool = False) -> str:
+def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool = False,
+                      content_override: str | None = None) -> str:
     """把平台约束、规则与待审内容拼成用户提示词。
 
     注意两个标记：【待审核内容】与【输出要求】——
     测试用的 Mock 供应商会依据它们定位"只应检查哪一段"，避免把规则文本里的示例词当成违规。
 
-    @param rules     本次交给模型的规则（可能是全量，也可能是检索后的一部分）
-    @param retrieved 是否经过检索：为 True 时在提示词里注明"这是从规则库检索出的相关条款"，
-                     让模型知道不需要自己穷举规则
+    @param rules            本次交给模型的规则（可能是全量，也可能是检索后的一部分）
+    @param retrieved        是否经过检索：为 True 时注明"这是从规则库检索出的相关条款"
+    @param content_override 关键词定位后的内容（节选）；为 None 时用原文
     """
     parts: list[str] = []
 
@@ -79,7 +80,9 @@ def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool 
     parts.append(header + "\n" + ("\n".join(rule_lines) if rule_lines else "（本次未提供规则）"))
 
     # 待审内容（Mock 依赖此标记定位）
-    parts.append(f"【待审核内容】\n标题：{req.title}\n正文：{req.content}")
+    body_text = req.content if content_override is None else content_override
+    excerpt = "" if content_override is None else "（以下为文章的节选，仅供定位违规片段参考）\n"
+    parts.append(f"【待审核内容】\n{excerpt}标题：{req.title}\n正文：{body_text}")
 
     # 场景说明：预检与正式审核的处置语气不同
     trigger_hint = {

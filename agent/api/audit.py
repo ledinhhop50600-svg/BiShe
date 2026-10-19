@@ -10,7 +10,7 @@ from config import settings
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from providers import get_provider
 from providers.base import ProviderError
-from rag import EmbeddingError, retrieve
+from rag import EmbeddingError, localize, retrieve
 from replay import load as replay_load
 from replay import save as replay_save
 from schemas import AuditRequest, AuditResponse, HitRule, TraceStep, Usage, Violation, risk_text
@@ -41,11 +41,14 @@ def audit(req: AuditRequest, x_agent_token: str = Header(default="")) -> AuditRe
 
     # ---- 2) 规则检索（RAG）----
     rules = list(req.rules)
+    # 敏感词库作为词面来源（规则示例词 + 敏感词），补上"短语对不上正文"的缺口
+    extra_terms = [w.get("word", "") for w in (req.sensitiveWords or []) if w.get("word")]
     retrieved = False
     rag_enabled = settings.rag_enabled if req.useRag is None else req.useRag
     if rag_enabled and len(rules) > settings.rag_top_k:
         try:
-            rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k)
+            rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k,
+                                     extra_terms=extra_terms)
             retrieved = True
             trace.append(TraceStep(step=1, action="retrieve_rules", output=detail))
         except EmbeddingError as e:
@@ -56,10 +59,17 @@ def audit(req: AuditRequest, x_agent_token: str = Header(default="")) -> AuditRe
     else:
         trace.append(TraceStep(step=1, action="load_rules", output=f"本次可用规则 {len(rules)} 条"))
 
-    # ---- 3) 调用模型 ----
+    # ---- 3) 关键词定位（可选模式，用于长文降本；未命中则回退全文）----
+    content_text = req.content
+    if req.localize:
+        content_text, loc_info = localize(req.content, rules, extra_terms=extra_terms)
+        trace.append(TraceStep(step=len(trace) + 1, action="localize", output=loc_info))
+
+    # ---- 4) 调用模型 ----
     try:
         provider = get_provider(settings.provider)
-        user_prompt = build_user_prompt(req, rules, retrieved)
+        user_prompt = build_user_prompt(req, rules, retrieved,
+                                        content_override=content_text if req.localize else None)
         result = provider.judge(SYSTEM_PROMPT, user_prompt)
     except ProviderError as e:
         # 契约约定：模型不可用返回 503，由主系统降级到人工审核

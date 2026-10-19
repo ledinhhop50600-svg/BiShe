@@ -97,7 +97,25 @@ def _chunks(text: str, size: int = 300, max_chunks: int = 20) -> list[str]:
     return chunks[:max_chunks]
 
 
-def retrieve(rules: list[RuleItem], query: str, top_k: int) -> tuple[list[RuleItem], str]:
+def _all_terms(rules: list[RuleItem], extra_terms: list[str] | None = None) -> list[str]:
+    """关键词来源：规则里列出的示例词 + 额外传入的词表（敏感词库）。
+
+    为什么要把敏感词库也算进来：规则里的示例词往往是完整短语（如"加我微信领资料"），
+    而正文写的是"加我微信 skincarer_note 领取" —— 短语对不上就漏了。
+    敏感词库由管理员维护、词更短更通用（"加我微信"），正好补上这个缺口。
+    """
+    terms: list[str] = []
+    for r in rules:
+        terms.extend(_keyword_terms(r))
+    for t in extra_terms or []:
+        if t and len(t) >= 2:
+            terms.append(t)
+    # 去重，长词优先（长词更具体）
+    return sorted(set(terms), key=len, reverse=True)
+
+
+def retrieve(rules: list[RuleItem], query: str, top_k: int,
+             extra_terms: list[str] | None = None) -> tuple[list[RuleItem], str]:
     """从规则中召回与 query 最相关的 top_k 条。
 
     采用**混合检索**：词面命中优先 + 向量检索补足。
@@ -114,17 +132,27 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int) -> tuple[list[RuleIt
     if top_k <= 0 or top_k >= len(rules):
         return rules, f"规则数 {len(rules)} 未超过阈值，全部使用"
 
-    # ---- 1) 词面兜底 ----
+    # ---- 1) 策略元规则：suggestedLevel == 0 的规则是"判定口径"（如 BIZ-001 商业推广属性判定）。
+    #         它跟具体内容无关，但决定整份判定的松紧（无商业属性该降级还是判违规）。
+    #         实测过一次失误：检索把 BIZ-001 挤出了前 6，导致个人分享被判成违规。
+    #         所以这类规则不参与检索竞争，每次必须带上。
+    meta_rules = [r for r in rules if (r.suggestedLevel or 0) == 0]
+    meta_codes = {r.code for r in meta_rules}
+
+    # ---- 2) 词面兜底（只在非元规则里做）----
+    all_terms = _all_terms(rules, extra_terms)
     keyword_hits: list[tuple[int, RuleItem, list[str]]] = []
     for r in rules:
-        hits = [t for t in _keyword_terms(r) if t in query]
+        if r.code in meta_codes:
+            continue
+        hits = [t for t in _all_terms([r], extra_terms) if t in query]
         if hits:
             keyword_hits.append((len(hits), r, hits))
     keyword_hits.sort(key=lambda item: item[0], reverse=True)
-    forced = [r for _, r, _ in keyword_hits]
+    forced = meta_rules + [r for _, r, _ in keyword_hits]
     forced_codes = {r.code for r in forced}
 
-    # ---- 2) 分段向量检索（只对未被词面命中的规则打分）----
+    # ---- 3) 分段向量检索（只对未被词面命中的规则打分）----
     queries = _chunks(query)
     candidates = [r for r in rules if r.code not in forced_codes]
     vector_ranked: list[tuple[float, RuleItem]] = []
@@ -143,11 +171,43 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int) -> tuple[list[RuleIt
             vector_ranked.append((best, r))
         vector_ranked.sort(key=lambda pair: pair[0], reverse=True)
 
-    # ---- 3) 合并：词面命中优先，向量分数补足 ----
+    # ---- 4) 合并：元规则 + 词面命中 优先，向量分数补足 ----
     picked = (forced + [r for _, r in vector_ranked])[:top_k]
 
+    meta_detail = "、".join(r.code for r in meta_rules) or "无"
     kw_detail = "、".join(f"{r.code}←{'/'.join(hits[:2])}" for _, r, hits in keyword_hits) or "无"
     vec_detail = "、".join(f"{r.code}({s:.2f})" for s, r in vector_ranked[: max(0, top_k - len(forced))]) or "无"
-    detail = (f"从 {len(rules)} 条规则中召回 {len(picked)} 条 | 词面命中：{kw_detail} | "
-              f"向量补足：{vec_detail} | 分段 {len(queries)} 路")
+    detail = (f"从 {len(rules)} 条规则中召回 {len(picked)} 条 | 元规则：{meta_detail} | "
+              f"词面命中：{kw_detail} | 向量补足：{vec_detail} | 分段 {len(queries)} 路")
     return picked, detail
+
+
+def localize(content: str, rules: list[RuleItem], max_chunks: int = 20,
+             extra_terms: list[str] | None = None) -> tuple[str, str]:
+    """关键词定位：把长文"聚焦"到命中了规则示例词的段落（含前后各一段上下文）。
+
+    设计意图（来自需求提出者的思路）：长文先按关键词定位可疑段落，只把这几段送给模型，
+    以降低 token 与耗时；**如果一段都没命中，必须回退全文** ——
+    否则就退化成了"关键词没命中就放行"，会重现关键词方案的全量漏判。
+
+    已知代价：分级判定（商业推广 vs 个人分享）需要看整体内容，只看片段的模型可能判偏。
+    因此它只作为**可选模式**，通过 A/B 实验决定是否启用。
+
+    @return (聚焦后的内容, 说明文字)
+    """
+    chunks = _chunks(content, max_chunks=max_chunks)
+    if len(chunks) <= 1:
+        return content, "内容较短（单段），无需定位"
+
+    terms = _all_terms(rules, extra_terms)
+
+    hit_idx = [i for i, c in enumerate(chunks) if any(t in c for t in terms)]
+    if not hit_idx:
+        return content, f"分 {len(chunks)} 段，关键词未命中任何段落 → 回退全文"
+
+    keep: set[int] = set()
+    for i in hit_idx:
+        keep.update({max(0, i - 1), i, min(len(chunks) - 1, i + 1)})
+    focused = "\n".join(chunks[i] for i in sorted(keep))
+    return focused, (f"分 {len(chunks)} 段，命中 {len(hit_idx)} 段，"
+                     f"发送 {len(keep)} 段（含前后上下文）")
