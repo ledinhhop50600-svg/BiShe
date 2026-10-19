@@ -48,6 +48,19 @@ function openAdapt(row) {
   router.push({ path: '/creator/adapt', query: { articleId: row.id } })
 }
 
+/**
+ * 已发布/已下架稿件：编辑即"改后重审"（D3 方案 B）。
+ * 保存后稿件立刻回到待审核，审核通过前不再对外展示 —— 绝不能让线上内容未经审核就改掉。
+ */
+async function openResubmit(row) {
+  await ElMessageBox.confirm(
+    `《${row.title}》${row.status === 2 ? '已发布' : '已下架'}。编辑保存后将进入待审核，审核通过前内容不再对外展示。`,
+    '编辑并重新送审',
+    { type: 'warning', confirmButtonText: '去编辑' }
+  )
+  router.push({ path: '/creator/submit', query: { id: row.id } })
+}
+
 async function onSubmit(row) {
   await ElMessageBox.confirm(`确定提交《${row.title}》进入审核吗？`, '提示', { type: 'info' })
   await submitArticle(row.id)
@@ -127,6 +140,7 @@ async function openFeedback(row) {
             <el-button v-if="row.status === 0 || row.status === 3" link type="success" @click="onSubmit(row)">提交审核</el-button>
             <el-button v-if="row.status === 1" link type="warning" @click="onWithdraw(row)">撤回</el-button>
             <el-button v-if="row.status === 3 || row.status === 4" link type="danger" @click="openFeedback(row)">查看反馈</el-button>
+            <el-button v-if="row.status === 2 || row.status === 5" link type="primary" @click="openResubmit(row)">编辑并重审</el-button>
             <el-button link type="primary" @click="openAdapt(row)">跨平台适配</el-button>
             <el-button v-if="row.status === 0" link type="danger" @click="onDelete(row)">删除</el-button>
           </template>

@@ -20,6 +20,7 @@ const formRef = ref()
 const saving = ref(false)
 const checking = ref(false)
 const sensitive = ref(null)
+const articleStatus = ref(null)
 
 const form = reactive({
   id: null,
@@ -40,6 +41,19 @@ const rules = {
 
 const isEdit = computed(() => !!form.id)
 
+/** 已发布(2)/已下架(5)：编辑即改后重审（D3 方案 B），保存后直接回到待审核 */
+const isResubmit = computed(() => articleStatus.value === 2 || articleStatus.value === 5)
+
+const headerTitle = computed(() => {
+  if (isResubmit.value) return '编辑并重新送审'
+  return isEdit.value ? '编辑稿件' : '写稿投稿'
+})
+
+const headerHint = computed(() => {
+  if (isResubmit.value) return '保存后进入待审核，审核通过前内容不再对外展示'
+  return '保存后为草稿；提交审核后由审核员处理'
+})
+
 onMounted(async () => {
   const [c, t] = await Promise.all([listCategories(), listTags()])
   categories.value = c
@@ -47,6 +61,7 @@ onMounted(async () => {
   // 从"我的稿件"点编辑进来时带着 id
   if (route.query.id) {
     const article = await getArticle(Number(route.query.id))
+    articleStatus.value = article.status
     Object.assign(form, {
       id: article.id,
       title: article.title,
@@ -97,6 +112,19 @@ async function submitForReview() {
   router.push('/creator/article')
 }
 
+/**
+ * 已发布/已下架稿件的保存动作：后端 update 会直接把状态改成待审核（D3 方案 B），
+ * 所以这里只需要保存，不要再调 /submit（那时状态已经是待审核了）。
+ */
+async function saveAndResubmit() {
+  const id = await persist()
+  if (!id) {
+    return
+  }
+  ElMessage.success('已保存并提交审核')
+  router.push('/creator/article')
+}
+
 async function runCheck() {
   if (!form.title && !form.content) {
     ElMessage.warning('请先填写标题或正文')
@@ -116,10 +144,17 @@ async function runCheck() {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <b>{{ isEdit ? '编辑稿件' : '写稿投稿' }}</b>
-          <span class="hint">保存后为草稿；提交审核后由审核员处理</span>
+          <b>{{ headerTitle }}</b>
+          <span class="hint">{{ headerHint }}</span>
         </div>
       </template>
+
+      <el-alert v-if="isResubmit" type="warning" :closable="false" class="block">
+        <template #title>
+          该稿件当前已{{ articleStatus === 2 ? '发布' : '下架' }}。保存后将进入待审核，
+          审核通过前不再对外展示；审核员会基于修改后的内容重新初审。
+        </template>
+      </el-alert>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="标题" prop="title">
@@ -149,9 +184,15 @@ async function runCheck() {
         </el-form-item>
 
         <el-form-item>
-          <el-button @click="saveDraft" :loading="saving">保存草稿</el-button>
-          <el-button @click="runCheck" :loading="checking">发布前检查</el-button>
-          <el-button type="primary" @click="submitForReview" :loading="saving">提交审核</el-button>
+          <template v-if="isResubmit">
+            <el-button @click="runCheck" :loading="checking">发布前检查</el-button>
+            <el-button type="primary" @click="saveAndResubmit" :loading="saving">保存并提交审核</el-button>
+          </template>
+          <template v-else>
+            <el-button @click="saveDraft" :loading="saving">保存草稿</el-button>
+            <el-button @click="runCheck" :loading="checking">发布前检查</el-button>
+            <el-button type="primary" @click="submitForReview" :loading="saving">提交审核</el-button>
+          </template>
         </el-form-item>
       </el-form>
     </el-card>

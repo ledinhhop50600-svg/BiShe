@@ -46,6 +46,13 @@ const routes = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '数据看板', perms: 'dashboard:view' },
       },
+      {
+        // 个人中心：只要求登录，不要求功能权限（所有角色都能维护自己的资料）
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { title: '个人中心' },
+      },
 
       // ---------- 系统管理（本阶段实现） ----------
       {

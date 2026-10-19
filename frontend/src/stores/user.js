@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getCurrentUser, login as loginApi, logout as logoutApi } from '@/api/auth'
+import { getCurrentUser, login as loginApi, logout as logoutApi, register as registerApi } from '@/api/auth'
 import { clearToken, getToken, saveToken } from '@/api/request'
 
 /**
@@ -37,6 +37,15 @@ export const useUserStore = defineStore('user', {
       return data
     },
 
+    /** 注册：后端固定分配创作者角色，成功后直接登录 */
+    async register(form) {
+      const data = await registerApi(form)
+      this.token = data.tokenValue
+      this.userInfo = data.userInfo
+      saveToken(data.tokenName, data.tokenValue)
+      return data
+    },
+
     /** 拉取当前用户信息（刷新页面后用它恢复状态） */
     async fetchUserInfo() {
       this.userInfo = await getCurrentUser()
@@ -50,6 +59,13 @@ export const useUserStore = defineStore('user', {
       } catch (e) {
         // 令牌已失效时登出接口会报错，这属于正常情况，忽略即可
       }
+      this.token = ''
+      this.userInfo = null
+      clearToken()
+    },
+
+    /** 只清本地登录态（后端令牌已失效时用，避免再调登出接口报错） */
+    logoutLocal() {
       this.token = ''
       this.userInfo = null
       clearToken()

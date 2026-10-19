@@ -140,9 +140,12 @@ public class ArticleServiceImpl implements ArticleService {
         }
         BizArticle article = mustGet(dto.getId());
         assertIsAuthor(article);
-        // 只有草稿和已驳回的稿件可以编辑：已提交审核或已发布的内容不能偷偷改
-        if (article.getStatus() != STATUS_DRAFT && article.getStatus() != STATUS_REJECTED) {
-            throw new BizException("当前状态不允许编辑（只有草稿和已驳回的稿件可以修改）");
+        // 草稿、已驳回可编辑；已发布、已下架也允许编辑，但编辑即"改后重审"（D3 方案 B）：
+        // 内容立刻回到待审核，审核通过后重新发布。绝不能让已发布内容未经审核就改掉。
+        boolean resubmit = article.getStatus() == STATUS_PUBLISHED
+                || article.getStatus() == STATUS_OFFLINE;
+        if (!resubmit && article.getStatus() != STATUS_DRAFT && article.getStatus() != STATUS_REJECTED) {
+            throw new BizException("当前状态不允许编辑（待审核稿件请先撤回）");
         }
         BizArticle update = new BizArticle();
         update.setId(dto.getId());
@@ -151,6 +154,12 @@ public class ArticleServiceImpl implements ArticleService {
         update.setSummary(dto.getSummary());
         update.setCoverImage(dto.getCoverImage());
         update.setCategoryId(dto.getCategoryId());
+        if (resubmit) {
+            // 直接进入待审核：原内容立即从内容广场消失，重新审核通过后再发布
+            update.setStatus(STATUS_PENDING);
+            update.setRiskLevel(-1);
+            update.setRejectReason("");
+        }
         articleMapper.updateById(update);
 
         // 标签整体覆盖

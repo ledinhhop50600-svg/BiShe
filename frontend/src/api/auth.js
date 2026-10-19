@@ -11,6 +11,16 @@ export function login(data) {
   return request.post('/auth/login', data)
 }
 
+/** 获取注册验证码：返回 { captchaId, question } */
+export function getCaptcha() {
+  return request.get('/auth/captcha')
+}
+
+/** 自主注册：成功后直接返回登录态（固定创作者角色） */
+export function register(data) {
+  return request.post('/auth/register', data)
+}
+
 /** 登出：让当前令牌失效 */
 export function logout() {
   return request.post('/auth/logout')

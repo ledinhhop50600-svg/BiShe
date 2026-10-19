@@ -4,17 +4,23 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.zimeiti.common.BizException;
 import com.zimeiti.dto.LoginDTO;
+import com.zimeiti.dto.RegisterDTO;
 import com.zimeiti.entity.SysMenu;
+import com.zimeiti.entity.SysRole;
 import com.zimeiti.entity.SysUser;
+import com.zimeiti.entity.SysUserRole;
 import com.zimeiti.mapper.SysMenuMapper;
 import com.zimeiti.mapper.SysRoleMapper;
 import com.zimeiti.mapper.SysUserMapper;
+import com.zimeiti.mapper.SysUserRoleMapper;
 import com.zimeiti.service.AuthService;
+import com.zimeiti.service.CaptchaService;
 import com.zimeiti.vo.LoginVO;
 import com.zimeiti.vo.UserInfoVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,7 +38,56 @@ public class AuthServiceImpl implements AuthService {
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
+    private final SysUserRoleMapper userRoleMapper;
+    private final CaptchaService captchaService;
     private final PasswordEncoder passwordEncoder;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginVO register(RegisterDTO dto) {
+        // 1) 验证码（一次性）：放在最前面，挡掉批量注册脚本
+        captchaService.verify(dto.getCaptchaId(), dto.getCaptchaAnswer());
+
+        // 2) 两次密码一致
+        if (!dto.getPassword().equals(dto.getConfirmPassword())) {
+            throw new BizException(400, "两次输入的密码不一致");
+        }
+
+        String username = dto.getUsername().trim();
+        String nickname = dto.getNickname().trim();
+
+        // 3) 账号唯一（逻辑删除的用户会被重命名，不会占用原账号）
+        Long exists = userMapper.selectCount(Wrappers.<SysUser>lambdaQuery()
+                .eq(SysUser::getUsername, username));
+        if (exists != null && exists > 0) {
+            throw new BizException(400, "账号已被注册，请换一个");
+        }
+
+        // 4) 固定分配「创作者」角色：注册不能自选角色，否则任何人都能注册成审核员
+        SysRole creatorRole = roleMapper.selectOne(Wrappers.<SysRole>lambdaQuery()
+                .eq(SysRole::getRoleKey, "creator"));
+        if (creatorRole == null) {
+            throw new BizException("系统未配置创作者角色，请联系管理员");
+        }
+
+        SysUser user = new SysUser();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setNickname(nickname);
+        user.setStatus(1);
+        user.setRemark("自主注册");
+        userMapper.insert(user);
+
+        userRoleMapper.insert(new SysUserRole(user.getId(), creatorRole.getId()));
+
+        // 5) 注册后直接登录，减少一次输入
+        StpUtil.login(user.getId());
+        LoginVO vo = new LoginVO();
+        vo.setTokenName(StpUtil.getTokenName());
+        vo.setTokenValue(StpUtil.getTokenValue());
+        vo.setUserInfo(buildUserInfo(user));
+        return vo;
+    }
 
     @Override
     public LoginVO login(LoginDTO dto) {
