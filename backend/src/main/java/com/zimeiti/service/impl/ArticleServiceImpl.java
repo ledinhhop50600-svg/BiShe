@@ -185,6 +185,11 @@ public class ArticleServiceImpl implements ArticleService {
         if (article.getStatus() != STATUS_PENDING) {
             throw new BizException("只有待审核的稿件可以审核");
         }
+        // 利益冲突隔离：审核员同时也可以是创作者（D2 决策），
+        // 但绝不能审核自己的稿件 —— 否则他可以自己放行自己的违规内容。
+        if (article.getAuthorId() == StpUtil.getLoginIdAsLong()) {
+            throw new BizException("不能审核自己投稿的稿件，请由其他审核员处理");
+        }
         String action = dto.getAction();
         BizArticle update = new BizArticle();
         update.setId(id);

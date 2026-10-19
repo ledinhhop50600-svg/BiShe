@@ -1,6 +1,8 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getArticle } from '@/api/article'
+import { checkText } from '@/api/sensitive'
 import { handleReport, pageReports } from '@/api/report'
 
 /**
@@ -16,6 +18,29 @@ const dialogVisible = ref(false)
 const current = ref(null)
 const form = reactive({ status: 1, remark: '' })
 const submitting = ref(false)
+
+// 被举报稿件的详情（审核员需要看到正文才能判断举报是否成立）
+const detailVisible = ref(false)
+const detail = ref(null)
+const sensitive = ref(null)
+const detailLoading = ref(false)
+
+async function openArticle(row) {
+  if (!row.articleId) {
+    return
+  }
+  detailVisible.value = true
+  detail.value = null
+  sensitive.value = null
+  detailLoading.value = true
+  try {
+    detail.value = await getArticle(row.articleId)
+    // 顺带跑一次敏感词基线，给审核员一个参考
+    sensitive.value = await checkText(`${detail.value.title}\n${detail.value.content || ''}`)
+  } finally {
+    detailLoading.value = false
+  }
+}
 
 onMounted(load)
 
@@ -75,7 +100,11 @@ async function submit() {
     <el-card shadow="never" class="table-card">
       <template #header><b>举报列表</b></template>
       <el-table v-loading="loading" :data="list" border>
-        <el-table-column prop="articleTitle" label="被举报稿件" min-width="220" show-overflow-tooltip />
+        <el-table-column label="被举报稿件" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openArticle(row)">{{ row.articleTitle }}</el-button>
+          </template>
+        </el-table-column>
         <el-table-column prop="reporterName" label="举报人" width="110" />
         <el-table-column prop="reason" label="举报理由" min-width="240" show-overflow-tooltip />
         <el-table-column label="状态" width="110">
@@ -131,6 +160,43 @@ async function submit() {
         <el-button type="primary" :loading="submitting" @click="submit">提交处理</el-button>
       </template>
     </el-dialog>
+
+    <!-- 稿件详情：审核员需要看到正文，才能判断举报是否成立 -->
+    <el-dialog v-model="detailVisible" title="被举报稿件详情" width="720px">
+      <div v-loading="detailLoading">
+        <template v-if="detail">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="标题" :span="2">{{ detail.title }}</el-descriptions-item>
+            <el-descriptions-item label="作者">{{ detail.authorName }}</el-descriptions-item>
+            <el-descriptions-item label="分类">{{ detail.categoryName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="风险等级">{{ detail.riskLevel }}</el-descriptions-item>
+            <el-descriptions-item label="当前状态">{{ detail.status }}</el-descriptions-item>
+          </el-descriptions>
+
+          <div class="content-box">{{ detail.content }}</div>
+
+          <el-card v-if="sensitive" shadow="never" class="block">
+            <template #header><b>敏感词检测（关键词基线）</b></template>
+            <div class="line">
+              <el-tag :type="sensitive.passed ? 'success' : 'danger'" size="small">
+                {{ sensitive.passed ? '未命中' : '命中' }}
+              </el-tag>
+              <span class="msg">{{ sensitive.message }}</span>
+            </div>
+            <div v-if="!sensitive.passed" class="line">
+              <el-tag v-for="w in sensitive.matched" :key="w" type="danger" size="small" class="tag">{{ w }}</el-tag>
+            </div>
+          </el-card>
+        </template>
+        <el-empty v-else-if="!detailLoading" description="稿件不存在或已被删除" />
+      </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button v-if="current" type="primary" @click="detailVisible = false; dialogVisible = true">
+          回到处理
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -146,5 +212,30 @@ async function submit() {
 
 .block {
   margin-top: 16px;
+}
+
+.content-box {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.line {
+  margin-bottom: 8px;
+}
+
+.msg {
+  color: #4b5563;
+  margin-left: 6px;
+}
+
+.tag {
+  margin-right: 4px;
 }
 </style>

@@ -19,6 +19,15 @@ const target = ref(null)
 const reason = ref('')
 const submitting = ref(false)
 
+// 查看全文：只看标题和摘要没法判断是否值得举报
+const detailVisible = ref(false)
+const detail = ref(null)
+
+function openDetail(item) {
+  detail.value = item
+  detailVisible.value = true
+}
+
 onMounted(load)
 
 async function load() {
@@ -83,7 +92,10 @@ async function submitReport() {
         <div class="item-summary">{{ item.summary || item.content?.slice(0, 80) + '...' }}</div>
         <div class="item-footer">
           <span class="time">{{ item.publishTime?.replace('T', ' ').slice(0, 16) }}</span>
-          <el-button link type="danger" @click="openReport(item)">举报</el-button>
+          <div>
+            <el-button link type="primary" @click="openDetail(item)">查看全文</el-button>
+            <el-button link type="danger" @click="openReport(item)">举报</el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -112,6 +124,27 @@ async function submitReport() {
       <template #footer>
         <el-button @click="reportVisible = false">取消</el-button>
         <el-button type="danger" :loading="submitting" @click="submitReport">提交举报</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 查看全文：内容判定完再决定是否举报 -->
+    <el-dialog v-model="detailVisible" :title="detail?.title || '内容详情'" width="720px">
+      <template v-if="detail">
+        <el-descriptions :column="3" border size="small">
+          <el-descriptions-item label="作者">{{ detail.authorName }}</el-descriptions-item>
+          <el-descriptions-item label="分类">{{ detail.categoryName || '未分类' }}</el-descriptions-item>
+          <el-descriptions-item label="发布时间">
+            {{ detail.publishTime?.replace('T', ' ').slice(0, 16) }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <div class="content-box">{{ detail.content }}</div>
+        <div v-if="detail.tagNames?.length" class="detail-tags">
+          标签：<el-tag v-for="t in detail.tagNames" :key="t" size="small" type="info" class="tag">{{ t }}</el-tag>
+        </div>
+      </template>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="danger" @click="detailVisible = false; openReport(detail)">举报这篇内容</el-button>
       </template>
     </el-dialog>
   </div>
@@ -176,5 +209,27 @@ async function submitReport() {
 
 .block {
   margin-top: 12px;
+}
+
+.content-box {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.detail-tags {
+  margin-top: 10px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.tag {
+  margin-right: 4px;
 }
 </style>

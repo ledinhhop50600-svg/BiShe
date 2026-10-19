@@ -32,9 +32,15 @@ public class ArticleController {
 
     private final ArticleService articleService;
 
-    /** 后台稿件列表（管理员/审核员） */
+    /**
+     * 后台稿件列表。
+     * <p>注意这里用的是 OR 权限：这个接口被两个页面复用 ——
+     * 「稿件管理」（管理员，article:list）与「审核工作台」（审核员，audit:workbench）。
+     * 早前只写了 article:list，导致审核员打开工作台时被 403 拦下（待审队列永远是空的）。
+     * 凡是共用接口，权限要覆盖**所有调用方**，不能只按其中一个页面来设计。
+     */
     @GetMapping("/page")
-    @SaCheckPermission("article:list")
+    @SaCheckPermission(value = {"article:list", "audit:workbench"}, mode = SaMode.OR)
     public Result<PageResult<ArticleVO>> page(@RequestParam(defaultValue = "1") long pageNum,
                                               @RequestParam(defaultValue = "10") long pageSize,
                                               @RequestParam(required = false) String title,

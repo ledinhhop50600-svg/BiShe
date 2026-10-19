@@ -100,7 +100,13 @@ async function onOffline(row) {
     <el-card shadow="never" class="table-card">
       <template #header><b>稿件列表</b></template>
       <el-table v-loading="loading" :data="list" border>
-        <el-table-column prop="id" label="ID" width="70" />
+        <!-- 显示"当前页第几条"，而不是数据库主键：主键会因为测试期间的增删而不连续，
+             直接展示 id 看起来像是"序号错乱"。id 只在操作时使用，界面不需要暴露。 -->
+        <el-table-column label="序号" width="70">
+          <template #default="scope">
+            {{ (query.pageNum - 1) * query.pageSize + scope.$index + 1 }}
+          </template>
+        </el-table-column>
         <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
         <el-table-column prop="authorName" label="作者" width="110" />
         <el-table-column prop="categoryName" label="分类" width="110" />

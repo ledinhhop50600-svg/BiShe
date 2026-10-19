@@ -13,6 +13,10 @@
 
 SET NAMES utf8mb4;
 
+-- 整个种子脚本放在一个事务里：任何一步失败都整体回滚。
+-- 避免出现"删了旧数据、新数据只插入一半"的半残状态（本脚本曾因为一处重复 INSERT 中断过）。
+START TRANSACTION;
+
 -- 清空（按业务无关的固定顺序，避免关联数据残留）
 DELETE FROM audit_adaptation;
 DELETE FROM audit_review;
@@ -94,12 +98,15 @@ INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perm
 -- 评测中心
 (60, 0,  '评测中心',     'C', '/eval',              'eval/index',        'eval:manage',       'TrendCharts', 7, 1);
 
--- 角色-菜单：管理员全部；审核员看数据看板 + 举报处理 + 审核中心；创作者看数据看板 + 创作中心
+-- 角色-菜单：管理员全部；审核员看数据看板 + 举报处理 + 审核中心 + 创作中心；创作者看数据看板 + 创作中心
+-- 说明（2026-10-16 调整）：审核员也具备创作能力（我的稿件 / 去投稿 / 内容广场）。
+-- 业务上一个人可以同时是"审核员"和"创作者"，但必须隔离利益冲突 —— 后端已加规则：不能审核自己投稿的稿件。
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 1, id FROM sys_menu;
 
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES
 (2, 1), (2, 10), (2, 13), (2, 20), (2, 21), (2, 22), (2, 211),
+(2, 40), (2, 41), (2, 42), (2, 44),
 (3, 1), (3, 40), (3, 41), (3, 42), (3, 43), (3, 44);
 
 -- ================================================================
@@ -334,6 +341,8 @@ INSERT INTO audit_sensitive_word (word, category, level) VALUES
 -- ================================================================
 -- 十、核对
 -- ================================================================
+COMMIT;
+
 SELECT '角色' AS 数据项, COUNT(*) AS 条数 FROM sys_role
 UNION ALL SELECT '用户', COUNT(*) FROM sys_user
 UNION ALL SELECT '菜单', COUNT(*) FROM sys_menu
