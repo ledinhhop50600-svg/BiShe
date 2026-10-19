@@ -129,8 +129,12 @@ const routes = [
         component: () => import('@/views/creator/plaza/index.vue'),
         meta: { title: '内容广场', perms: 'creator:plaza' },
       },
-      // 跨平台适配在阶段 6 实现
-      todo('creator/adapt', '跨平台适配', 'creator:adapt'),
+      {
+        path: 'creator/adapt',
+        name: 'CreatorAdapt',
+        component: () => import('@/views/creator/adapt/index.vue'),
+        meta: { title: '跨平台适配', perms: 'creator:adapt' },
+      },
 
       // ---------- 评测中心（阶段 8 实现） ----------
       todo('eval', '评测中心', 'eval:manage'),

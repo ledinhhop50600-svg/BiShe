@@ -22,6 +22,10 @@ class RuleItem(BaseModel):
     content: str
     source: str | None = None
     suggestedLevel: int | None = None
+    # 规则适用平台标识：为空表示通用规则（适用于所有平台）。
+    # 阶段 6 的适配接口一次可适配多个平台，智能体靠这个字段给每个平台挑出
+    # "通用规则 + 该平台专属规则"，不会把小红的规则拿去检查微博。
+    platformKey: str | None = None
 
 
 class PlatformInfo(BaseModel):
@@ -110,6 +114,64 @@ class AuditResponse(BaseModel):
     trace: list[TraceStep] = Field(default_factory=list)
     agentFailed: bool = False
     # 是否来自回放缓存（契约之外的附加字段，便于测试时辨别；Java 侧忽略未知字段）
+    replayed: bool = False
+
+
+# ======================================================================
+# 接口二：跨平台适配（阶段 6）
+# ======================================================================
+
+class AdaptRequest(BaseModel):
+    requestId: str = Field(min_length=1)
+    articleId: int
+    title: str = ""
+    content: str = ""
+    # 目标平台顺序即返回结果的顺序（契约要求）
+    targetPlatformKeys: list[str] = Field(min_length=1, max_length=5)
+    platforms: list[PlatformInfo] = Field(default_factory=list)
+    rules: list[RuleItem] = Field(default_factory=list)
+
+
+class FormatCheck(BaseModel):
+    """格式自检结果 —— 由程序校验，不交给模型判断（结果必须是确定性的）。"""
+
+    passed: bool
+    titleLen: int
+    contentLen: int
+    tagCount: int
+    issues: list[str] = Field(default_factory=list)
+
+
+class Compliance(BaseModel):
+    """适配后按目标平台规则做的合规预检（审核结论的精简版）。"""
+
+    riskLevel: int
+    riskLevelText: str
+    reason: str = ""
+    hitRules: list[HitRule] = Field(default_factory=list)
+    violations: list[Violation] = Field(default_factory=list)
+    suggestion: str = ""
+
+
+class AdaptResult(BaseModel):
+    platformKey: str
+    platformName: str
+    title: str
+    content: str
+    tags: list[str] = Field(default_factory=list)
+    formatCheck: FormatCheck
+    compliance: Compliance
+
+
+class AdaptResponse(BaseModel):
+    contractVersion: str = "1.0"
+    requestId: str
+    results: list[AdaptResult]
+    model: str = ""
+    usage: Usage = Field(default_factory=Usage)
+    durationMs: int = 0
+    agentFailed: bool = False
+    # 契约之外的附加字段，便于测试时辨别回放；Java 侧忽略未知字段
     replayed: bool = False
 
 

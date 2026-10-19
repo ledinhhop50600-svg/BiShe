@@ -301,6 +301,7 @@ CREATE TABLE audit_adaptation (
     adapted_tags       VARCHAR(300)  DEFAULT NULL COMMENT '适配后的话题标签',
     format_check       VARCHAR(1000) DEFAULT NULL COMMENT '格式自检结果，如"标题 18/20 字，标签 3 个，通过"',
     compliance_check   VARCHAR(1000) DEFAULT NULL COMMENT '该平台的合规预检结论',
+    version            INT          NOT NULL DEFAULT 1 COMMENT '同一稿件的第几次适配（同一平台每生成一次 +1，便于回看历史版本）',
     adapted_by         BIGINT        DEFAULT NULL COMMENT '操作人用户 id',
     create_time        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '适配时间',
     PRIMARY KEY (id),

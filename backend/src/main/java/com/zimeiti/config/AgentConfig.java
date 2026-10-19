@@ -23,9 +23,24 @@ public class AgentConfig {
 
     @Bean
     public RestClient agentRestClient() {
+        return buildRestClient(timeoutSeconds * 1000);
+    }
+
+    /**
+     * 适配专用客户端：读超时放宽到 120 秒。
+     * <p>原因：适配一个平台要调用两次模型（改写 + 合规预检），一次请求最多 5 个平台，
+     * 30 秒的审核超时不够用。审核接口仍用上面那个 30 秒的客户端 —— 两类请求的预算不同，
+     * 不能共用一个超时值。
+     */
+    @Bean
+    public RestClient adaptRestClient() {
+        return buildRestClient(120_000);
+    }
+
+    private RestClient buildRestClient(int readTimeoutMillis) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(3000);
-        factory.setReadTimeout(timeoutSeconds * 1000);
+        factory.setReadTimeout(readTimeoutMillis);
         return RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(factory)

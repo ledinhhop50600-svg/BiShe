@@ -41,6 +41,11 @@ function openEdit(row) {
   router.push({ path: '/creator/submit', query: { id: row.id } })
 }
 
+/** 带着稿件 id 跳到适配页，用户不用再选一次稿 */
+function openAdapt(row) {
+  router.push({ path: '/creator/adapt', query: { articleId: row.id } })
+}
+
 async function onSubmit(row) {
   await ElMessageBox.confirm(`确定提交《${row.title}》进入审核吗？`, '提示', { type: 'info' })
   await submitArticle(row.id)
@@ -105,12 +110,13 @@ function openFeedback(row) {
           </template>
         </el-table-column>
         <el-table-column prop="updateTime" label="更新时间" width="170" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="350" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.status === 0 || row.status === 3" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status === 0 || row.status === 3" link type="success" @click="onSubmit(row)">提交审核</el-button>
             <el-button v-if="row.status === 1" link type="warning" @click="onWithdraw(row)">撤回</el-button>
             <el-button v-if="row.status === 3 || row.status === 4" link type="danger" @click="openFeedback(row)">查看反馈</el-button>
+            <el-button link type="primary" @click="openAdapt(row)">跨平台适配</el-button>
             <el-button v-if="row.status === 0" link type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>

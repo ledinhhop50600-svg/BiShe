@@ -1,7 +1,7 @@
 """智能体服务入口。
 
 职责：启动 FastAPI 应用、注册路由、提供健康检查。
-具体能力在 api/ 下按契约拆分（当前只有审核/预检，阶段 6 会增加适配接口）。
+具体能力在 api/ 下按契约拆分（审核/预检、跨平台适配）。
 
 启动方式（在 agent 目录下）：
     .venv\\Scripts\\python.exe -m uvicorn main:app --port 8001
@@ -11,16 +11,18 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from api.adapt import router as adapt_router
 from api.audit import router as audit_router
 from config import settings
 
 app = FastAPI(
     title="自媒体平台 · 智能体服务",
     description="内容审核与跨平台适配的智能体服务，按 docs/Agent接口契约-v1.md 实现",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.include_router(audit_router)
+app.include_router(adapt_router)
 
 
 @app.exception_handler(RequestValidationError)

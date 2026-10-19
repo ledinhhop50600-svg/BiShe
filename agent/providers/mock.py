@@ -9,7 +9,9 @@
 """
 
 import json
+import re
 
+from format_check import parse_tag_range
 from providers.base import BaseProvider, ProviderResult
 
 # 关键词 -> (规则编号, 规则名, 类别, 问题描述)
@@ -74,6 +76,48 @@ class MockProvider(BaseProvider):
             prompt_tokens=0,
             completion_tokens=0,
         )
+
+    def adapt(self, system_prompt: str, user_prompt: str) -> ProviderResult:
+        """无 Key 时的确定性适配：截断到平台上限 + 生成固定数量的标签。
+
+        它不追求"改写得像人"，只保证整条链路（格式自检、合规预检、落库、界面）
+        在没有网络、没有 Key 的情况下也能跑通。
+        """
+        platform_name = _search(user_prompt, r"【目标平台】\n(.+?)（", "目标平台")
+        title_max = int(_search(user_prompt, r"标题上限：(\d+) 字", "0"))
+        content_max = int(_search(user_prompt, r"正文上限：(\d+) 字", "1000"))
+        tag_rule = _search(user_prompt, r"话题标签规则：([^\n]+)", "")
+        src_title = _search(user_prompt, r"【源文章】\n标题：([^\n]+)", "")
+        src_content = _search(user_prompt, r"正文：(.+?)\n\n【输出要求】", "")
+
+        title = src_title if title_max > 0 else ""
+        if title_max > 0:
+            title = title[:title_max]
+
+        prefix = f"（Mock 适配·{platform_name}）"
+        body = prefix + src_content
+        if content_max > 0:
+            body = body[:content_max]
+
+        lo, hi = parse_tag_range(tag_rule)
+        if hi == 0:
+            tags = []
+        else:
+            n = max(lo or 0, min(hi or 3, 3))
+            tags = ["#测试", "#跨平台适配", "#内容运营"][:n]
+
+        payload = {"title": title, "content": body, "tags": tags}
+        return ProviderResult(
+            text=json.dumps(payload, ensure_ascii=False),
+            model="mock",
+            prompt_tokens=0,
+            completion_tokens=0,
+        )
+
+
+def _search(text: str, pattern: str, default: str) -> str:
+    m = re.search(pattern, text, re.S)
+    return m.group(1).strip() if m else default
 
 
 def _extract_article(user_prompt: str) -> str:
