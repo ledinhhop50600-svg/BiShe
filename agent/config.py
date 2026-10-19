@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # 实测：严重违规 + 长文时输出可到 2900+ tokens，3000 会截断（曾导致一次 422），故提高到 4000。
     max_output_tokens: int = 4000
 
+    # 思考模式强度：none 关闭 / low / high / max（DeepSeek 默认是 high，即开启思考）。
+    # 审核是"按规则判定"的任务，不需要长链推理；开启思考会：
+    #   ① 显著增加耗时与 token 成本；② 长文时推理可能耗尽输出预算，导致 content 为空（实测踩过）。
+    # 关掉后判定质量不受影响，且结果更稳定、更便宜。需要对比实验时可改为 high。
+    reasoning_effort: str = "none"
+
     # ---- 响应回放（测试设施）----
     # 开启后，同一 requestId 的请求直接返回缓存结果：
     #  - 重复评测不重复花钱

@@ -69,7 +69,9 @@ def audit(req: AuditRequest, x_agent_token: str = Header(default="")) -> AuditRe
     try:
         data = json.loads(result.text)
     except json.JSONDecodeError as e:
-        # 契约约定：模型输出不符合约定结构返回 422
+        # 解析失败时必须留下原始输出：否则线上只能看到"422"，无从排错。
+        # 常见原因：输出被 max_tokens 截断（长文+多违规）、JSON 里有未转义的引号。
+        logger.error("模型输出无法解析：%s | 原始输出（前 600 字）：%s", e, result.text[:600])
         raise HTTPException(status_code=422, detail="model_output_invalid: 模型未返回合法 JSON") from e
 
     level = int(data.get("riskLevel", 0))

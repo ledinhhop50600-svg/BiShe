@@ -37,6 +37,9 @@ class OpenAICompatProvider(BaseProvider):
                 ],
                 temperature=settings.temperature,
                 response_format={"type": "json_object"},
+                # 关闭思考模式（默认是 high）：审核不需要长推理，开启会让长文请求既慢又贵，
+                # 更严重的是推理可能耗尽输出预算，导致 content 为空、JSON 解析失败（实测踩过）。
+                reasoning_effort=settings.reasoning_effort,
                 # 显式限制输出长度：长文可能命中多处违规，JSON 会变长；
                 # 不设上限时若被截断，JSON 解析会直接失败（契约里对应 422）。
                 max_tokens=settings.max_output_tokens,
@@ -52,7 +55,23 @@ class OpenAICompatProvider(BaseProvider):
         except Exception as e:  # noqa: BLE001 - 兜底，统一转成 503
             raise ProviderError(f"模型调用失败：{type(e).__name__}: {e}") from e
 
-        text = resp.choices[0].message.content or ""
+        choice = resp.choices[0]
+        text = choice.message.content or ""
+        finish = choice.finish_reason
+
+        # 空内容 / 被截断必须显式报错，不能把空串丢给上层去"解析失败"——那样只能看到一个 422，
+        # 无从判断是模型没输出、还是输出被截断。
+        if not text.strip():
+            raise ProviderError(
+                f"模型返回空内容（finish_reason={finish}）。常见原因：思考过程耗尽了输出预算，"
+                f"或 max_tokens 设置过小"
+            )
+        if finish == "length":
+            raise ProviderError(
+                f"模型输出被截断（finish_reason=length，max_tokens={settings.max_output_tokens}），"
+                f"JSON 不完整"
+            )
+
         usage = resp.usage
         return ProviderResult(
             text=text,
