@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-10-19 14:24",
+  "dataset": {
+    "total": 52,
+    "selfBuilt": 28,
+    "public": 24,
+    "labelPolicy": "放宽口径（2026-10-19 裁决后的 5 条标签）",
+    "publicSource": "ToxiCN (ACL 2023)，正负各 12 条"
+  },
+  "model": "deepseek-flash",
+  "thinking": "关闭（reasoning_effort=none）",
+  "rounds": 1,
+  "note": "v4 复测；v3 严格口径下 A54/B78/C85/D83。放宽口径后排序变化，但规则引用与可审计性不变。",
+  "schemes": [
+    {"name": "A 关键词规则", "accuracy": 58, "f1": 0.39, "tokens": 0, "cost": 0.0, "durationMs": 0, "errors": 0, "exactMatch": 54, "ruleRecall": 0, "fragmentValidity": 100},
+    {"name": "B 纯大模型", "accuracy": 83, "f1": 0.77, "tokens": 980, "cost": 0.00149, "durationMs": 1550, "errors": 0, "exactMatch": 93, "ruleRecall": 0, "fragmentValidity": 100},
+    {"name": "C RAG+大模型", "accuracy": 81, "f1": 0.76, "tokens": 1514, "cost": 0.00213, "durationMs": 1871, "errors": 0, "exactMatch": 89, "ruleRecall": 47, "fragmentValidity": 100},
+    {"name": "D 全量规则+大模型", "accuracy": 81, "f1": 0.75, "tokens": 2084, "cost": 0.00266, "durationMs": 1616, "errors": 0, "exactMatch": 86, "ruleRecall": 60, "fragmentValidity": 100}
+  ],
+  "tiers": [
+    {"name": "易：明确的商业违规", "A": 75, "B": 100, "C": 100, "D": 100},
+    {"name": "陷阱：含违禁词但语境合法", "A": 25, "B": 100, "C": 100, "D": 100},
+    {"name": "盲区：无关键词但实际违规", "A": 33, "B": 67, "C": 33, "D": 67},
+    {"name": "分级边界：个人分享 vs 商业推广", "A": 50, "B": 100, "C": 100, "D": 75},
+    {"name": "多类/多违规混排", "A": 75, "B": 100, "C": 75, "D": 75},
+    {"name": "长文本（含千字级）", "A": 100, "B": 100, "C": 100, "D": 100},
+    {"name": "正常内容", "A": 83, "B": 100, "C": 100, "D": 100},
+    {"name": "公开数据集（ToxiCN）", "A": 50, "B": 67, "C": 71, "D": 71}
+  ],
+  "comparison": [
+    {"scheme": "A 关键词规则", "strictV3": 54, "relaxedV4": 58},
+    {"scheme": "B 纯大模型", "strictV3": 78, "relaxedV4": 83},
+    {"scheme": "C RAG+大模型", "strictV3": 85, "relaxedV4": 81},
+    {"scheme": "D 全量规则+大模型", "strictV3": 83, "relaxedV4": 81}
+  ],
+  "conclusions": [
+    "排序翻转是标签口径造成的：二分类里「疑似 = 放行」，B 本来就少拦边界内容，因此放宽后上升；C/D 把边界判成违规，变成过度阻断。",
+    "保留 C（RAG）的真正理由不是单一准确率：规则引用召回 C47% / D60% / B0%，审核员终审需要可追溯的依据；规则可改、行为可调；人工兜底下偏保守是安全方向。",
+    "D 的规则召回更高但 token 多 38%、四级精确匹配更低，只作消融对照。",
+    "C 的待修项：多类混排召回不全（top_k=6 装不下）；疑似/违规边界偏严。"
+  ]
+}

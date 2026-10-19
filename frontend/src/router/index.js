@@ -149,7 +149,12 @@ const routes = [
       },
 
       // ---------- 评测中心（阶段 8 实现） ----------
-      todo('eval', '评测中心', 'eval:manage'),
+      {
+        path: 'eval',
+        name: 'Eval',
+        component: () => import('@/views/eval/index.vue'),
+        meta: { title: '评测中心', perms: 'eval:manage' },
+      },
     ],
   },
   // 未匹配到的地址统一回首页
