@@ -182,6 +182,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--out", default=os.path.join(HERE, "..", "docs", "实验-对比实验-v3.md"))
+    parser.add_argument("--title", default="对比实验记录", help="报告标题")
     parser.add_argument("--localize", action="store_true")
     parser.add_argument("--min-len", type=int, default=0,
                         help="只跑正文长度 >= 该值的样本（定位实验只关心长文）")
@@ -257,7 +258,7 @@ def main():
 
     # ---------------- 报告 ----------------
     L = []
-    L.append("# 对比实验记录 v3（多轮 + 定位实验）\n")
+    L.append(f"# {args.title}\n")
     L.append(f"- 实验时间：{time.strftime('%Y-%m-%d %H:%M')}")
     L.append(f"- 评测集：{len(samples)} 条（自建 {data['stats']['self_built']} + 公开 {data['stats']['public']}）")
     L.append(f"- Agent：{AGENT} | 规则 {len(rules)} 条 | 敏感词 {len(words)} 个 | 轮数 {rounds}")
