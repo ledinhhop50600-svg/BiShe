@@ -83,6 +83,7 @@ INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perm
 (41, 40, '我的稿件',     'C', '/creator/article',   'creator/article',   'creator:article',   'Collection', 1, 1),
 (42, 40, '去投稿',       'C', '/creator/submit',    'creator/submit',    'creator:submit',    'Plus',      2, 1),
 (43, 40, '跨平台适配',   'C', '/creator/adapt',     'creator/adapt',     'creator:adapt',     'Share',     3, 1),
+(44, 40, '内容广场',     'C', '/creator/plaza',     'creator/plaza',     'creator:plaza',     'View',      4, 1),
 
 -- 系统管理
 (50, 0,  '系统管理',     'M', '/system',            NULL,                NULL,                'Setting',   6, 1),
@@ -99,7 +100,7 @@ SELECT 1, id FROM sys_menu;
 
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES
 (2, 1), (2, 10), (2, 13), (2, 20), (2, 21), (2, 22), (2, 211),
-(3, 1), (3, 40), (3, 41), (3, 42), (3, 43);
+(3, 1), (3, 40), (3, 41), (3, 42), (3, 43), (3, 44);
 
 -- ================================================================
 -- 四、稿件分类与标签
@@ -304,6 +305,7 @@ INSERT INTO audit_sensitive_word (word, category, level) VALUES
 ('国家级', '广告法', 2),
 ('最高级', '广告法', 2),
 ('最佳', '广告法', 2),
+('最好', '广告法', 2),
 ('第一品牌', '广告法', 2),
 ('全国首家', '广告法', 2),
 ('绝无仅有', '广告法', 2),

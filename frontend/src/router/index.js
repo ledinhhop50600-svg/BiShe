@@ -67,21 +67,69 @@ const routes = [
         meta: { title: '菜单管理', perms: 'system:menu' },
       },
 
-      // ---------- 内容管理（阶段 3 实现） ----------
-      todo('content/article', '稿件管理', 'article:list'),
-      todo('content/category', '分类管理', 'category:manage'),
-      todo('content/report', '举报处理', 'report:handle'),
+      // ---------- 内容管理（阶段 3 已实现） ----------
+      {
+        path: 'content/article',
+        name: 'ContentArticle',
+        component: () => import('@/views/content/article/index.vue'),
+        meta: { title: '稿件管理', perms: 'article:list' },
+      },
+      {
+        path: 'content/category',
+        name: 'ContentCategory',
+        component: () => import('@/views/content/category/index.vue'),
+        meta: { title: '分类管理', perms: 'category:manage' },
+      },
+      {
+        path: 'content/report',
+        name: 'ContentReport',
+        component: () => import('@/views/content/report/index.vue'),
+        meta: { title: '举报处理', perms: 'report:handle' },
+      },
 
-      // ---------- 审核中心（阶段 5～7 实现） ----------
-      todo('audit/workbench', '审核工作台', 'audit:workbench'),
+      // ---------- 审核中心 ----------
+      {
+        path: 'audit/workbench',
+        name: 'AuditWorkbench',
+        component: () => import('@/views/audit/workbench/index.vue'),
+        meta: { title: '审核工作台', perms: 'audit:workbench' },
+      },
+      {
+        path: 'audit/sensitive',
+        name: 'AuditSensitive',
+        component: () => import('@/views/audit/sensitive/index.vue'),
+        meta: { title: '敏感词库', perms: 'audit:sensitive' },
+      },
+      // 审核记录与规则库在阶段 5 之后实现
       todo('audit/record', '审核记录', 'audit:record'),
       todo('audit/rule', '审核规则库', 'audit:rule'),
-      todo('audit/sensitive', '敏感词库', 'audit:sensitive'),
 
-      // ---------- 平台管理与适配 ----------
-      todo('platform', '平台管理', 'platform:manage'),
-      todo('creator/article', '我的稿件', 'creator:article'),
-      todo('creator/submit', '去投稿', 'creator:submit'),
+      // ---------- 平台管理与创作中心 ----------
+      {
+        path: 'platform',
+        name: 'Platform',
+        component: () => import('@/views/platform/index.vue'),
+        meta: { title: '平台管理', perms: 'platform:manage' },
+      },
+      {
+        path: 'creator/article',
+        name: 'CreatorArticle',
+        component: () => import('@/views/creator/article/index.vue'),
+        meta: { title: '我的稿件', perms: 'creator:article' },
+      },
+      {
+        path: 'creator/submit',
+        name: 'CreatorSubmit',
+        component: () => import('@/views/creator/submit/index.vue'),
+        meta: { title: '去投稿', perms: 'creator:submit' },
+      },
+      {
+        path: 'creator/plaza',
+        name: 'CreatorPlaza',
+        component: () => import('@/views/creator/plaza/index.vue'),
+        meta: { title: '内容广场', perms: 'creator:plaza' },
+      },
+      // 跨平台适配在阶段 6 实现
       todo('creator/adapt', '跨平台适配', 'creator:adapt'),
 
       // ---------- 评测中心（阶段 8 实现） ----------
