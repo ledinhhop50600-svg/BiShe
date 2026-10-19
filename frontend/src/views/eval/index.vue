@@ -55,6 +55,18 @@ const adaptationFailures = computed(() =>
   (adaptation.value?.results || []).filter((r) => r.formatPassed === false && !r.error)
 )
 
+const HUMAN_LABELS = { style: '风格符合度', retention: '信息保留度', readability: '可读性' }
+
+const humanRows = computed(() => {
+  const h = adaptation.value?.humanSummary
+  if (!h) return []
+  return Object.entries(h).map(([key, v]) => ({
+    key,
+    label: HUMAN_LABELS[key] || key,
+    ...v,
+  }))
+})
+
 const demoFailures = computed(() =>
   (demo.value?.results || []).filter((r) => r.formatPassed === false && !r.error)
 )
@@ -224,6 +236,38 @@ async function runDemo() {
       <el-alert v-else type="success" :closable="false" class="block">
         <template #title>本次所有适配结果格式自检全部通过。</template>
       </el-alert>
+
+      <template v-if="humanRows.length">
+        <div class="sub-title">
+          人工评分（已填 {{ adaptation.consistency?.filled ?? 0 }} / {{ adaptation.consistency?.total ?? 0 }} 条）
+        </div>
+        <el-table :data="humanRows" border size="small">
+          <el-table-column prop="label" label="维度" width="130" />
+          <el-table-column label="人工均分" width="110">
+            <template #default="{ row }">{{ Number(row.humanMean || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="LLM 均分" width="110">
+            <template #default="{ row }">{{ Number(row.llmMean || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="平均绝对差" width="110">
+            <template #default="{ row }">{{ Number(row.mad || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="完全一致" width="110">
+            <template #default="{ row }">{{ row.exact }}/{{ row.n }}</template>
+          </el-table-column>
+          <el-table-column label="Spearman" width="110">
+            <template #default="{ row }">
+              {{ row.spearman === null || row.spearman === undefined ? '无定义' : row.spearman }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-alert type="warning" :closable="false" class="block">
+          <template #title>
+            人工评分全部为 5 分（方差为 0），Spearman 无定义；只能说明人工接受度为 100%，
+            不能验证 LLM 的排序能力。详细分析：<code>docs/eval/adaptation-human-eval.md</code>。
+          </template>
+        </el-alert>
+      </template>
 
       <el-alert type="info" :closable="false" class="block">
         <template #title>

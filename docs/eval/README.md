@@ -11,6 +11,8 @@
 | `adaptation-results.json` | `tools/eval_adaptation.py --run-id paper-20261019-v2` | 适配评估论文数据（4 篇 × 3 平台） |
 | `adaptation-review.html` | `tools/make_human_review.py` | **人工评分页面（推荐）**：原文 vs 适配结果 + 1-5 分评分 + 导出 CSV |
 | `adaptation-human-review.md` | 同上 | 纯文字版（不想开浏览器时看） |
+| `adaptation-human-scores.csv` | 评分页面导出 | 人工评分原始数据（当前 12 条已填） |
+| `adaptation-human-eval.md` | `tools/analyze_human_scores.py` | 人工 vs LLM 对比（MAD / 完全一致 / Spearman） |
 | `adaptation-human-sheet.csv` | 评估脚本生成 | 空白评分表（旧格式，可不用；优先用 HTML 页面） |
 | `adaptation-eval.md` | 同上 | 适配评估报告（指标、逐条结果、局限） |
 | `judge-cache.json` | 评估脚本自动维护 | LLM 评分缓存（按内容哈希；避免重复花钱） |
@@ -45,7 +47,12 @@ python tools/eval_adaptation.py --run-id paper --out-dir docs/eval --refresh-jud
    - **可读性**：读起来顺不顺（1 很难读 / 5 流畅）
 3. 不确定就给 3 分；页面顶部有完整评分标准；
 4. 评分自动保存在浏览器里，随时可以关掉再打开；全部填完后点右下角 **「导出评分 CSV」**；
-5. 把下载的 `adaptation-human-scores.csv` 放回 `docs/eval/`，即可计算与 LLM 评分的一致性。
+5. 把下载的 `adaptation-human-scores.csv` 放回 `docs/eval/`，然后运行：
+   `python tools/analyze_human_scores.py`，会生成 `adaptation-human-eval.md` 并更新结果 JSON。
+
+> **当前状态（2026-10-19）**：12 条已填，三项全部为 5 分。人工评分方差为 0，
+> Spearman 无定义，只能说明人工接受度为 100%，不能验证 LLM 的排序能力。
+> 详情见 `adaptation-human-eval.md`。若论文需要秩相关，需要对部分结果给出低于 5 分的评分。
 
 > **建议全部评完再看 LLM 分数**：页面默认隐藏，评完可勾选「显示 LLM 评分」对照，避免先看 AI 分数被带偏。
 > 如果不想用浏览器，`adaptation-human-review.md` 是同样的内容（纯文字版），可以直接在编辑器里看。

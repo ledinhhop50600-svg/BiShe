@@ -90,6 +90,12 @@
         "retention": 5,
         "readability": 5,
         "comment": "风格贴合小红书，emoji和分点排版清晰，核心信息完整保留且无编造，语言通顺易读。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -120,6 +126,12 @@
         "retention": 5,
         "readability": 5,
         "comment": "结构清晰、分点小标题符合公众号阅读习惯，核心信息完整保留且无编造，语言通顺，仅结尾引导语略平淡。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -156,6 +168,12 @@
         "retention": 5,
         "readability": 4,
         "comment": "脚本化分镜与口播贴合抖音短视频节奏，五条技巧完整保留且无编造，结尾互动提问和标签也到位；仅个别口播句可再口语化一点。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -192,6 +210,12 @@
         "retention": 5,
         "readability": 4,
         "comment": "小红书风格适配到位，emoji、分步编号和标签齐全，核心信息完整无编造，仅个别步骤（如乳液或面霜）略显简略，整体通顺易读。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -222,6 +246,12 @@
         "retention": 5,
         "readability": 5,
         "comment": "结构清晰、要点完整，符合公众号阅读习惯，仅标题略长且标签缺失，整体适配良好。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -258,6 +288,12 @@
         "retention": 5,
         "readability": 4,
         "comment": "口播节奏和画面提示很贴合抖音短视频习惯，五步顺序与预算建议完整保留无编造，仅个别句子稍显书面，整体通顺清晰。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -293,6 +329,12 @@
         "retention": 4,
         "readability": 5,
         "comment": "风格和可读性都很贴合小红书，但删掉了“一周瘦十斤”等核心承诺，信息保留度略降，整体是合规且自然的改写。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -323,6 +365,12 @@
         "retention": 4,
         "readability": 5,
         "comment": "风格与结构贴合公众号科普调性，可读性强；但删去了源文“一周瘦十斤”等核心承诺，信息保留略打折扣，整体属合规化改写。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -358,6 +406,12 @@
         "retention": 4,
         "readability": 5,
         "comment": "脚本化改写符合抖音口播习惯，去除了绝对化承诺并加入风险提示，核心三餐信息保留完整，但“一周瘦十斤”等源文卖点被弱化，信息保留略有折损。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -394,6 +448,12 @@
         "retention": 4,
         "readability": 5,
         "comment": "小红书风格到位，分段短、有emoji和标签，核心方法基本保留；但结尾新增了源文没有的坑点4、5和改造后效果描述，属于轻微编造，信息保留度略扣。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -424,6 +484,12 @@
         "retention": 5,
         "readability": 4,
         "comment": "标题更聚焦、结构清晰，正文几乎完整保留原文信息且语句通顺，符合公众号长文阅读习惯；仅结尾略有截断，整体适配良好。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     },
     {
@@ -460,7 +526,75 @@
         "retention": 4,
         "readability": 5,
         "comment": "口播脚本节奏紧凑、画面感强，符合抖音短视频表达；核心做法保留完整，但压缩掉了卧室、卫生间、踩坑经验等源文内容，信息有所取舍。"
+      },
+      "human": {
+        "style": 5,
+        "retention": 5,
+        "readability": 5,
+        "comment": ""
       }
     }
-  ]
+  ],
+  "humanSummary": {
+    "style": {
+      "humanMean": 5,
+      "llmMean": 4,
+      "mad": 1,
+      "exact": 0,
+      "n": 12,
+      "humanStd": 0.0,
+      "spearman": null
+    },
+    "retention": {
+      "humanMean": 5,
+      "llmMean": 4.58,
+      "mad": 0.42,
+      "exact": 7,
+      "n": 12,
+      "humanStd": 0.0,
+      "spearman": null
+    },
+    "readability": {
+      "humanMean": 5,
+      "llmMean": 4.67,
+      "mad": 0.33,
+      "exact": 8,
+      "n": 12,
+      "humanStd": 0.0,
+      "spearman": null
+    }
+  },
+  "consistency": {
+    "filled": 12,
+    "total": 12,
+    "dims": {
+      "style": {
+        "humanMean": 5,
+        "llmMean": 4,
+        "mad": 1,
+        "exact": 0,
+        "n": 12,
+        "humanStd": 0.0,
+        "spearman": null
+      },
+      "retention": {
+        "humanMean": 5,
+        "llmMean": 4.58,
+        "mad": 0.42,
+        "exact": 7,
+        "n": 12,
+        "humanStd": 0.0,
+        "spearman": null
+      },
+      "readability": {
+        "humanMean": 5,
+        "llmMean": 4.67,
+        "mad": 0.33,
+        "exact": 8,
+        "n": 12,
+        "humanStd": 0.0,
+        "spearman": null
+      }
+    }
+  }
 }
