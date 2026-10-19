@@ -42,7 +42,8 @@ def audit(req: AuditRequest, x_agent_token: str = Header(default="")) -> AuditRe
     # ---- 2) 规则检索（RAG）----
     rules = list(req.rules)
     retrieved = False
-    if settings.rag_enabled and len(rules) > settings.rag_top_k:
+    rag_enabled = settings.rag_enabled if req.useRag is None else req.useRag
+    if rag_enabled and len(rules) > settings.rag_top_k:
         try:
             rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k)
             retrieved = True

@@ -37,6 +37,9 @@ class OpenAICompatProvider(BaseProvider):
                 ],
                 temperature=settings.temperature,
                 response_format={"type": "json_object"},
+                # 显式限制输出长度：长文可能命中多处违规，JSON 会变长；
+                # 不设上限时若被截断，JSON 解析会直接失败（契约里对应 422）。
+                max_tokens=settings.max_output_tokens,
                 timeout=settings.timeout_seconds,
             )
         except APITimeoutError as e:

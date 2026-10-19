@@ -71,19 +71,30 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def _sentences(text: str, limit: int = 12) -> list[str]:
-    """把内容切成句子，作为多路查询。
+def _chunks(text: str, size: int = 300, max_chunks: int = 20) -> list[str]:
+    """把文本切成约 size 字的块，尽量在句子边界切。
 
-    为什么要分段检索：一篇内容往往同时涉及多个方面（价格、功效、引流……）。
-    如果把整篇当成一个查询向量，向量会被"平均"掉，与某一条规则高度相关的句子会被稀释，
-    导致该规则排不进前 K 名（实测就漏掉过"国家级"对应的绝对化用语规则）。
-    分段后每条规则取"与最相关句子的最高分"，召回明显更稳。
+    为什么按"字数"而不是按"句子数"切：篇幅是变量。早前用 12 句上限，
+    一两千字的文章会被截断（后半段直接不参与检索，那里的违规永远发现不了）。
+    按字数切能保证覆盖率：20 块 × 300 字 = 6000 字，足够覆盖常规长文；
+    超长内容会被截断，这一点在文档中如实说明。
     """
-    parts = re.split(r"[。！？!?\n]+", text or "")
-    out = [p.strip() for p in parts if len(p.strip()) >= 4]
-    if not out:
-        out = [(text or "")[:500]]
-    return out[:limit]
+    parts = re.split(r"(?<=[。！？!?\n])", text or "")
+    sentences = [p.strip() for p in parts if p.strip()]
+    chunks: list[str] = []
+    buf = ""
+    for s in sentences:
+        if len(buf) + len(s) <= size:
+            buf += s
+        else:
+            if buf:
+                chunks.append(buf)
+            buf = s
+    if buf:
+        chunks.append(buf)
+    if not chunks:
+        chunks = [(text or "")[:size]]
+    return chunks[:max_chunks]
 
 
 def retrieve(rules: list[RuleItem], query: str, top_k: int) -> tuple[list[RuleItem], str]:
@@ -114,7 +125,7 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int) -> tuple[list[RuleIt
     forced_codes = {r.code for r in forced}
 
     # ---- 2) 分段向量检索（只对未被词面命中的规则打分）----
-    queries = _sentences(query)
+    queries = _chunks(query)
     candidates = [r for r in rules if r.code not in forced_codes]
     vector_ranked: list[tuple[float, RuleItem]] = []
 

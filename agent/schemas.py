@@ -48,6 +48,11 @@ class AuditRequest(BaseModel):
     platform: PlatformInfo | None = None
     rules: list[RuleItem] = Field(default_factory=list)
 
+    # 仅供对比实验使用：强制开启/关闭规则检索。
+    # 为空时按服务端配置（.env 的 RAG_ENABLED）；实验脚本用它把同一批样本跑成
+    # 「RAG」与「全量规则」两组，而不必反复改配置重启服务。
+    useRag: bool | None = None
+
 
 # ======================================================================
 # 响应
