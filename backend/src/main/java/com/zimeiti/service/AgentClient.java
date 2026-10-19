@@ -24,7 +24,7 @@ import java.util.Map;
 public class AgentClient {
 
     private static final int AUDIT_ATTEMPTS = 2;
-    private static final int ADAPT_ATTEMPTS = 1;
+    private static final int ADAPT_ATTEMPTS = 2;
 
     private final RestClient restClient;
     private final RestClient adaptRestClient;
@@ -46,26 +46,36 @@ public class AgentClient {
      * @throws AgentUnavailableException 重试后仍失败时抛出，由调用方决定如何降级
      */
     public Map<String, Object> audit(Map<String, Object> request) {
-        return post(restClient, "/api/agent/audit", request, AUDIT_ATTEMPTS, "审核");
+        // 审核重试所有失败（偶发网络抖动），保持原有行为
+        return post(restClient, "/api/agent/audit", request,
+                AUDIT_ATTEMPTS, true, false, "审核");
     }
 
     /**
      * 调用跨平台适配接口。
+     * <p>适配**只重试"连接被拒绝"**：这类失败说明请求没有到达 Agent，重试不会重复花钱；
+     * 其他失败（超时、5xx、响应为空）不重试，避免一次适配做两遍。同时强制短连接，
+     * 防止 Agent 重启后复用已失效的 keep-alive 连接（实测会 0.1 秒内直接报不可用）。
      *
      * @throws AgentUnavailableException 失败时抛出，由调用方降级为"请稍后重试"
      */
     public Map<String, Object> adapt(Map<String, Object> request) {
-        return post(adaptRestClient, "/api/agent/adapt", request, ADAPT_ATTEMPTS, "适配");
+        return post(adaptRestClient, "/api/agent/adapt", request,
+                ADAPT_ATTEMPTS, false, true, "适配");
     }
 
     private Map<String, Object> post(RestClient client, String path, Map<String, Object> request,
-                                     int maxAttempts, String scene) {
+                                     int maxAttempts, boolean retryAll, boolean closeConnection,
+                                     String scene) {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 var spec = client.post()
                         .uri(path)
                         .contentType(MediaType.APPLICATION_JSON);
+                if (closeConnection) {
+                    spec = spec.header("Connection", "close");
+                }
                 if (StringUtils.hasText(token)) {
                     spec = spec.header("X-Agent-Token", token);
                 }
@@ -79,11 +89,35 @@ public class AgentClient {
                 return body;
             } catch (RuntimeException e) {
                 last = e;
-                log.warn("调用智能体{}失败（第 {}/{} 次）：{}", scene, attempt, maxAttempts, e.getMessage());
+                boolean retry = attempt < maxAttempts && (retryAll || isConnectFailure(e));
+                log.warn("调用智能体{}失败（第 {}/{} 次，{}）：{}", scene, attempt, maxAttempts,
+                        retry ? "将重试" : "不再重试", e.getMessage());
+                if (!retry) {
+                    break;
+                }
+                if (!retryAll) {
+                    // 连接被拒绝通常发生在 Agent 刚重启时，稍等再试
+                    try {
+                        Thread.sleep(300);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
         }
         throw new AgentUnavailableException(
                 last == null ? "未知错误" : last.getMessage(), last);
+    }
+
+    /** 是否为"连接被拒绝"——只有这种失败能确定请求没有送达，重试是安全的 */
+    private boolean isConnectFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.ConnectException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 智能体不可用：网络失败、超时、5xx、响应为空等 */
