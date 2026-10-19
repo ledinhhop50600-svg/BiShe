@@ -18,7 +18,14 @@ _SAFE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 def _path(request_id: str) -> str:
-    safe = _SAFE.sub("_", request_id)[:80]
+    """缓存键 = 供应商 + 模型 + requestId。
+
+    为什么要把模型算进键里：同一个 requestId 在不同模型下的结论是不同的。
+    如果只按 requestId 缓存，换模型（mock → deepseek，或做多模型对比实验）时会命中
+    **上一个模型的结论**，得出完全错误的对比数据。论文里要做模型对比，这个区分是必须的。
+    """
+    composite = f"{settings.provider}:{settings.model}:{request_id}"
+    safe = _SAFE.sub("_", composite)[:120]
     return os.path.join(settings.replay_dir, f"{safe}.json")
 
 
