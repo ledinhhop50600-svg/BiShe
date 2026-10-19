@@ -7,6 +7,7 @@ import com.zimeiti.common.Result;
 import com.zimeiti.dto.ArticleReviewDTO;
 import com.zimeiti.dto.ArticleSaveDTO;
 import com.zimeiti.service.ArticleService;
+import com.zimeiti.service.AuditAgentService;
 import com.zimeiti.vo.ArticleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 /**
  * 稿件接口。
  * <p>状态流转全部通过"动作接口"完成（submit / withdraw / review / offline），
@@ -31,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ArticleController {
 
     private final ArticleService articleService;
+    private final AuditAgentService auditAgentService;
 
     /**
      * 后台稿件列表。
@@ -129,5 +133,18 @@ public class ArticleController {
     public Result<Void> offline(@PathVariable Long id) {
         articleService.offline(id);
         return Result.ok();
+    }
+
+    /**
+     * 调用智能体审核（阶段 4 的集成点）。
+     * <p>返回的是智能体按契约给出的结构化结论；智能体不可用时返回 agentFailed=true，
+     * 由前端提示"请改为人工审核"——业务不中断。
+     * <p>阶段 7 会把这个结果落库（audit_record）并接进审核工作台。
+     */
+    @PostMapping("/{id}/agent-audit")
+    @SaCheckPermission(value = {"article:list", "audit:workbench"}, mode = SaMode.OR)
+    public Result<Map<String, Object>> agentAudit(@PathVariable Long id,
+                                                  @RequestParam(defaultValue = "POST_AUDIT") String triggerType) {
+        return Result.ok(auditAgentService.audit(id, triggerType));
     }
 }

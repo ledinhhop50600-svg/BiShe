@@ -1,0 +1,74 @@
+"""提示词构造。
+
+阶段 4 的版本：把**全部规则**放进提示词，让模型直接判断。
+阶段 5 会加入规则检索（RAG）：先从规则库里召回最相关的若干条再交给模型，
+并在此基础上做分级策略调整（D4：先判内容性质，再定严格度）。
+"""
+
+from schemas import AuditRequest
+
+SYSTEM_PROMPT = """你是一名专业的内容审核员，负责判断自媒体内容是否违反平台规则。
+
+工作要求：
+1. 严格依据提供的规则条目判断，不要凭空发明规则；命中的规则必须给出规则编号。
+2. 必须结合语境。例如作品名《最好的我们》中的"最好"不构成绝对化用语，
+   而商品宣传里的"全网最好的产品"才可能构成。
+3. 必须定位到原文中的具体片段，并给出具体、可执行的修改建议；不要说"请注意合规"这类空话。
+4. 风险等级只能是 0/1/2/3 之一：0 通过、1 疑似、2 违规、3 严重。
+   拿不准时给"疑似"而不是直接判"违规"。
+
+只输出 JSON，不要输出任何解释文字。JSON 结构如下：
+{
+  "riskLevel": 0,
+  "reason": "判定理由（中文）",
+  "hitRules": [{"code": "规则编号", "name": "规则名", "category": "类别"}],
+  "violations": [{"fragment": "原文片段", "issue": "问题", "suggestion": "具体修改建议"}],
+  "suggestion": "总体处置建议",
+  "confidence": 0.0
+}
+未发现违规时：riskLevel 为 0，hitRules 与 violations 为空数组。
+"""
+
+
+def build_user_prompt(req: AuditRequest) -> str:
+    """把平台约束、规则与待审内容拼成用户提示词。
+
+    注意两个标记：【待审核内容】与【输出要求】——
+    测试用的 Mock 供应商会依据它们定位"只应检查哪一段"，避免把规则文本里的示例词当成违规。
+    """
+    parts: list[str] = []
+
+    # 目标平台与格式约束
+    if req.platform:
+        p = req.platform
+        parts.append(
+            "【目标平台】\n"
+            f"{p.platformName}（{p.platformKey}）："
+            f"标题上限 {p.titleMaxLen} 字，正文上限 {p.contentMaxLen} 字。\n"
+            f"话题标签规则：{p.tagRule or '无'}\n"
+            f"内容风格：{p.styleDesc or '无'}"
+        )
+
+    # 规则清单
+    rule_lines = []
+    for r in req.rules:
+        line = f"- [{r.code}] {r.name}（类别：{r.category}，建议等级：{r.suggestedLevel}）：{r.content}"
+        if r.source:
+            line += f"\n  依据：{r.source}"
+        rule_lines.append(line)
+    parts.append("【审核规则】\n" + ("\n".join(rule_lines) if rule_lines else "（本次未提供规则）"))
+
+    # 待审内容（Mock 依赖此标记定位）
+    parts.append(f"【待审核内容】\n标题：{req.title}\n正文：{req.content}")
+
+    # 场景说明：预检与正式审核的处置语气不同
+    trigger_hint = {
+        "PRE_CHECK": "本次是发布前预检：结论只用于提示创作者，不阻断发布。",
+        "POST_AUDIT": "本次是发布申请的正式审核：结论将供审核员决策。",
+        "REPORT_REVIEW": "本次是举报后的复审：请重点关注被举报的问题。",
+        "ADAPT_CHECK": "本次是适配到目标平台后的合规检查。",
+    }.get(req.triggerType, "")
+
+    parts.append("【输出要求】\n" + (trigger_hint + "\n" if trigger_hint else "") + "只输出 JSON，结构见系统提示词。")
+
+    return "\n\n".join(parts)

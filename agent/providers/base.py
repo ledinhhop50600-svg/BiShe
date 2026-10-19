@@ -1,0 +1,31 @@
+"""模型供应商抽象。
+
+为什么要抽象：审核能力最终取决于模型，但"用哪家的模型"是会变的 ——
+开发期用便宜的、预算紧时降级到免费的、论文里要对比不同模型的效果。
+把"调用模型"收在一个接口里，上层（审核流程）就不用关心具体是谁。
+"""
+
+from dataclasses import dataclass
+
+
+@dataclass
+class ProviderResult:
+    """一次模型调用的结果。"""
+
+    text: str
+    model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
+class ProviderError(RuntimeError):
+    """模型服务不可用（网络、鉴权、余额、限流等）—— 对应契约的 HTTP 503。"""
+
+
+class BaseProvider:
+    """供应商接口：输入两段提示词，返回模型输出的原始文本。"""
+
+    name: str = "base"
+
+    def judge(self, system_prompt: str, user_prompt: str) -> ProviderResult:  # pragma: no cover
+        raise NotImplementedError
