@@ -74,14 +74,27 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
-    public PageResult<ArticleVO> plaza(long current, long size, String title) {
-        // 只给"已发布"的稿件，且排除自己的 —— 举报自己的稿件没有意义
+    public PageResult<ArticleVO> plaza(long current, long size, String title, Long categoryId, Long tagId) {
+        // 内容广场：所有已发布的稿件（含自己的）
+        var wrapper = Wrappers.<BizArticle>lambdaQuery()
+                .eq(BizArticle::getStatus, STATUS_PUBLISHED)
+                .like(StringUtils.hasText(title), BizArticle::getTitle, title)
+                .eq(categoryId != null, BizArticle::getCategoryId, categoryId);
+
+        // 标签筛选：稿件与标签是多对多，先用标签反查稿件 id，再按 id 过滤。
+        // 数据量小的时候这样写最直观；稿件量很大时应改为 EXISTS 子查询或加冗余字段。
+        if (tagId != null) {
+            List<Long> ids = articleTagMapper.selectList(
+                            Wrappers.<BizArticleTag>lambdaQuery().eq(BizArticleTag::getTagId, tagId))
+                    .stream().map(BizArticleTag::getArticleId).toList();
+            if (ids.isEmpty()) {
+                return PageResult.of(List.of(), 0, current, size);
+            }
+            wrapper.in(BizArticle::getId, ids);
+        }
+
         Page<BizArticle> page = articleMapper.selectPage(new Page<>(current, size),
-                Wrappers.<BizArticle>lambdaQuery()
-                        .eq(BizArticle::getStatus, STATUS_PUBLISHED)
-                        .ne(BizArticle::getAuthorId, StpUtil.getLoginIdAsLong())
-                        .like(StringUtils.hasText(title), BizArticle::getTitle, title)
-                        .orderByDesc(BizArticle::getPublishTime));
+                wrapper.orderByDesc(BizArticle::getPublishTime));
         return PageResult.of(toVOList(page.getRecords()), page.getTotal(), page.getCurrent(), page.getSize());
     }
 

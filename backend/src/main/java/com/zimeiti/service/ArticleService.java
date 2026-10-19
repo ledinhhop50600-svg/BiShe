@@ -23,8 +23,13 @@ public interface ArticleService {
     /** 我的稿件（创作者视角，只返回自己的） */
     PageResult<ArticleVO> myPage(long current, long size, Integer status);
 
-    /** 内容广场：已发布稿件（不含自己的），创作者可在这里浏览他人内容并举报 */
-    PageResult<ArticleVO> plaza(long current, long size, String title);
+    /**
+     * 内容广场：已发布稿件（含自己的），支持按标题、分类、标签筛选。
+     * <p>为什么包含自己的内容：广场的定位是"浏览平台已发布的内容"，
+     * 把自己发的内容排除在外并不合理（创作者也会想看看自己发布后的样子）。
+     * 需要限制的是"不能举报自己的内容"，这由举报接口把关，而不是靠隐藏内容来实现。
+     */
+    PageResult<ArticleVO> plaza(long current, long size, String title, Long categoryId, Long tagId);
 
     /** 稿件详情（创作者只能看自己的） */
     ArticleVO detail(Long id);

@@ -2,17 +2,28 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { plazaArticles } from '@/api/article'
+import { listCategories, listTags } from '@/api/category'
 import { createReport } from '@/api/report'
+import { useUserStore } from '@/stores/user'
 
 /**
- * 内容广场（创作者）：浏览他人已发布的稿件。
- * <p>它的作用是给"举报"一个真实的入口 —— 没有浏览，就无法举报；
- * 同时也让创作者能看到同行的内容，符合自媒体平台的日常使用习惯。
+ * 内容广场（创作者）：浏览平台已发布的内容。
+ * <p>这里**包含自己发布的内容** —— 广场就是"看平台上的内容"，把自己排除在外并不合理。
+ * 要限制的是"不能举报自己的内容"：界面上对自己的卡片隐藏举报按钮，后端举报接口也会二次校验。
  */
+const userStore = useUserStore()
+
 const loading = ref(false)
 const list = ref([])
 const total = ref(0)
-const query = reactive({ pageNum: 1, pageSize: 9, title: '' })
+const categories = ref([])
+const tags = ref([])
+const query = reactive({ pageNum: 1, pageSize: 9, title: '', categoryId: null, tagId: null })
+
+/** 是否是自己的内容：是则隐藏举报入口 */
+function isMine(item) {
+  return item.authorId === userStore.userInfo?.id
+}
 
 const reportVisible = ref(false)
 const target = ref(null)
@@ -28,7 +39,13 @@ function openDetail(item) {
   detailVisible.value = true
 }
 
-onMounted(load)
+onMounted(async () => {
+  // 分类与标签用于筛选；两者都是登录即可读取的基础数据
+  const [c, t] = await Promise.all([listCategories(), listTags()])
+  categories.value = c
+  tags.value = t
+  await load()
+})
 
 async function load() {
   loading.value = true
@@ -42,6 +59,14 @@ async function load() {
 }
 
 function search() {
+  query.pageNum = 1
+  load()
+}
+
+function resetQuery() {
+  query.title = ''
+  query.categoryId = null
+  query.tagId = null
   query.pageNum = 1
   load()
 }
@@ -73,10 +98,21 @@ async function submitReport() {
     <el-card shadow="never">
       <el-form :inline="true" :model="query" @submit.prevent>
         <el-form-item label="标题">
-          <el-input v-model="query.title" placeholder="搜索已发布内容" clearable style="width: 220px" @keyup.enter="search" />
+          <el-input v-model="query.title" placeholder="搜索已发布内容" clearable style="width: 200px" @keyup.enter="search" />
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="query.categoryId" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-select v-model="query.tagId" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="search">搜索</el-button>
+          <el-button type="primary" @click="search">查询</el-button>
+          <el-button @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -84,7 +120,10 @@ async function submitReport() {
     <div v-loading="loading" class="grid">
       <el-empty v-if="!list.length" description="暂无已发布的内容" />
       <el-card v-for="item in list" :key="item.id" shadow="hover" class="item">
-        <div class="item-title">{{ item.title }}</div>
+        <div class="item-title">
+          {{ item.title }}
+          <el-tag v-if="isMine(item)" size="small" type="success" effect="plain">我的内容</el-tag>
+        </div>
         <div class="item-meta">
           <span>{{ item.authorName }}</span>
           <span>{{ item.categoryName || '未分类' }}</span>
@@ -94,7 +133,7 @@ async function submitReport() {
           <span class="time">{{ item.publishTime?.replace('T', ' ').slice(0, 16) }}</span>
           <div>
             <el-button link type="primary" @click="openDetail(item)">查看全文</el-button>
-            <el-button link type="danger" @click="openReport(item)">举报</el-button>
+            <el-button v-if="!isMine(item)" link type="danger" @click="openReport(item)">举报</el-button>
           </div>
         </div>
       </el-card>
@@ -144,7 +183,9 @@ async function submitReport() {
       </template>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button type="danger" @click="detailVisible = false; openReport(detail)">举报这篇内容</el-button>
+        <el-button v-if="detail && !isMine(detail)" type="danger" @click="detailVisible = false; openReport(detail)">
+          举报这篇内容
+        </el-button>
       </template>
     </el-dialog>
   </div>

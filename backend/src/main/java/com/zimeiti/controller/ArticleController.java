@@ -58,13 +58,15 @@ public class ArticleController {
         return Result.ok(articleService.myPage(pageNum, pageSize, status));
     }
 
-    /** 内容广场：创作者浏览他人已发布的稿件（用于举报） */
+    /** 内容广场：浏览平台已发布的稿件（含自己的），支持标题 / 分类 / 标签筛选 */
     @GetMapping("/plaza")
     @SaCheckPermission("creator:plaza")
     public Result<PageResult<ArticleVO>> plaza(@RequestParam(defaultValue = "1") long pageNum,
                                                @RequestParam(defaultValue = "10") long pageSize,
-                                               @RequestParam(required = false) String title) {
-        return Result.ok(articleService.plaza(pageNum, pageSize, title));
+                                               @RequestParam(required = false) String title,
+                                               @RequestParam(required = false) Long categoryId,
+                                               @RequestParam(required = false) Long tagId) {
+        return Result.ok(articleService.plaza(pageNum, pageSize, title, categoryId, tagId));
     }
 
     /** 稿件详情：三类角色都可能看，服务层再判断创作者只能看自己的 */
