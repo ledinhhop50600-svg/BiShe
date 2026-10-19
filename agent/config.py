@@ -39,6 +39,18 @@ class Settings(BaseSettings):
     replay_enabled: bool = True
     replay_dir: str = ".replay"
 
+    # ---- 规则检索（RAG）----
+    # 开启后：先从规则库里召回最相关的 rag_top_k 条，再交给模型判断。
+    # 关闭后：把全部规则塞进提示词（规则少时也能用，但无法做论文的三方案对比）。
+    rag_enabled: bool = True
+    rag_top_k: int = 6
+
+    # 向量化使用硅基流动的 bge-m3（免费、1024 维、OpenAI 兼容）
+    siliconflow_api_key: str = ""
+    embedding_base_url: str = "https://api.siliconflow.cn/v1"
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_timeout_seconds: float = 15.0
+
     # ---- 与主系统之间的可选共享口令 ----
     # 留空表示不校验。生产环境应当设置，防止本机其他程序随意调用。
     agent_token: str = ""

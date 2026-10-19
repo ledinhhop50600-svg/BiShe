@@ -5,7 +5,7 @@
 并在此基础上做分级策略调整（D4：先判内容性质，再定严格度）。
 """
 
-from schemas import AuditRequest
+from schemas import AuditRequest, RuleItem
 
 SYSTEM_PROMPT = """你是一名专业的内容审核员，负责判断自媒体内容是否违反平台规则。
 
@@ -38,11 +38,15 @@ SYSTEM_PROMPT = """你是一名专业的内容审核员，负责判断自媒体�
 """
 
 
-def build_user_prompt(req: AuditRequest) -> str:
+def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool = False) -> str:
     """把平台约束、规则与待审内容拼成用户提示词。
 
     注意两个标记：【待审核内容】与【输出要求】——
     测试用的 Mock 供应商会依据它们定位"只应检查哪一段"，避免把规则文本里的示例词当成违规。
+
+    @param rules     本次交给模型的规则（可能是全量，也可能是检索后的一部分）
+    @param retrieved 是否经过检索：为 True 时在提示词里注明"这是从规则库检索出的相关条款"，
+                     让模型知道不需要自己穷举规则
     """
     parts: list[str] = []
 
@@ -59,12 +63,15 @@ def build_user_prompt(req: AuditRequest) -> str:
 
     # 规则清单
     rule_lines = []
-    for r in req.rules:
+    for r in rules:
         line = f"- [{r.code}] {r.name}（类别：{r.category}，建议等级：{r.suggestedLevel}）：{r.content}"
         if r.source:
             line += f"\n  依据：{r.source}"
         rule_lines.append(line)
-    parts.append("【审核规则】\n" + ("\n".join(rule_lines) if rule_lines else "（本次未提供规则）"))
+    header = "【审核规则】"
+    if retrieved:
+        header += f"\n（以下 {len(rules)} 条是从规则库中检索出的与本文最相关的条款，请依据它们判断）"
+    parts.append(header + "\n" + ("\n".join(rule_lines) if rule_lines else "（本次未提供规则）"))
 
     # 待审内容（Mock 依赖此标记定位）
     parts.append(f"【待审核内容】\n标题：{req.title}\n正文：{req.content}")

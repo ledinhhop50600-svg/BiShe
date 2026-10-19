@@ -1,6 +1,7 @@
 """接口层：审核 / 预检（对应 docs/Agent接口契约-v1.md 的接口一）。"""
 
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Header, HTTPException
@@ -9,9 +10,12 @@ from config import settings
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from providers import get_provider
 from providers.base import ProviderError
+from rag import EmbeddingError, retrieve
 from replay import load as replay_load
 from replay import save as replay_save
 from schemas import AuditRequest, AuditResponse, HitRule, TraceStep, Usage, Violation, risk_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -35,13 +39,26 @@ def audit(req: AuditRequest, x_agent_token: str = Header(default="")) -> AuditRe
     started = time.time()
     trace: list[TraceStep] = []
 
-    # ---- 2) 当前为"全量规则"模式（阶段 5 会替换为检索 + 判定）----
-    trace.append(TraceStep(step=1, action="load_rules", output=f"本次可用规则 {len(req.rules)} 条"))
+    # ---- 2) 规则检索（RAG）----
+    rules = list(req.rules)
+    retrieved = False
+    if settings.rag_enabled and len(rules) > settings.rag_top_k:
+        try:
+            rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k)
+            retrieved = True
+            trace.append(TraceStep(step=1, action="retrieve_rules", output=detail))
+        except EmbeddingError as e:
+            # 检索失败不能拖垮审核：降级为全量规则，并在 trace 里如实记录
+            logger.warning("规则检索失败，已降级为全量规则：%s", e)
+            trace.append(TraceStep(step=1, action="retrieve_rules_failed",
+                                   output=f"{e}；已降级为全量规则"))
+    else:
+        trace.append(TraceStep(step=1, action="load_rules", output=f"本次可用规则 {len(rules)} 条"))
 
     # ---- 3) 调用模型 ----
     try:
         provider = get_provider(settings.provider)
-        user_prompt = build_user_prompt(req)
+        user_prompt = build_user_prompt(req, rules, retrieved)
         result = provider.judge(SYSTEM_PROMPT, user_prompt)
     except ProviderError as e:
         # 契约约定：模型不可用返回 503，由主系统降级到人工审核
