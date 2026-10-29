@@ -7,7 +7,7 @@
 
 | 文件 | 来源 | 说明 |
 |---|---|---|
-| `audit-results.json` | `tools/experiment_compare.py --workers 10`（2026-10-29 扩展集 v5） | 审核实验主表（428 条、6 方案、分层、核心/公开拆分、结论） |
+| `audit-results.json` | `tools/experiment_compare.py --workers 10`（2026-10-29 扩展集 v5） | 审核实验主表（428 条、7 方案、分层、核心/公开拆分、结论） |
 | `adaptation-results.json` | `tools/eval_adaptation.py --run-id paper-20261019-v2` | 适配评估论文数据（4 篇 × 3 平台） |
 | `adaptation-review.html` | `tools/make_human_review.py` | **人工评分页面（推荐）**：原文 vs 适配结果 + 1-5 分评分 + 导出 CSV |
 | `adaptation-human-review.md` | 同上 | 纯文字版（不想开浏览器时看） |

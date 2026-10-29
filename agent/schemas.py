@@ -63,6 +63,7 @@ class AuditRequest(BaseModel):
     ragTopK: int | None = None
     ragMinScore: float | None = None
     compactRules: bool = False
+    catalogRules: bool = False
 
     # 仅供对比实验使用：开启「关键词定位」——先把长文聚焦到命中了规则示例词的段落，再送模型。
     # 一段都没命中时会自动回退全文（否则会退化成为关键词漏判）。

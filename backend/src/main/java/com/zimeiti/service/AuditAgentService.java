@@ -128,6 +128,12 @@ public class AuditAgentService {
         request.put("content", content == null ? "" : content);
         request.put("platform", toPlatformMap(platform));
         request.put("rules", toRuleList(rules));
+        // 2026-10-29 扩展集（428 条）结论：E1「纯大模型 + 最小规则目录」在核心集
+        // 准确率 96.4%、违规召回 91.7%、规则引用召回 83.3%，且 token 低于原版 RAG。
+        // 因此正式审核改为：不把规则正文塞进 prompt，只给编号/名称/类别/等级，让模型直接引用；
+        // 规则依据仍由主系统按编号回查数据库。RAG 版本保留给实验与适配合规预检。
+        request.put("useRag", false);
+        request.put("catalogRules", true);
         // 敏感词库随请求下发：智能体用它做"词面兜底"的关键词来源。
         // 规则里的示例词常是完整短语，正文写法常有出入；短词（"加我微信"）能兜住这种情况。
         request.put("sensitiveWords", toWordList());

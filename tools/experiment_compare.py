@@ -84,7 +84,7 @@ def run_keyword(sample, words):
 
 
 def run_agent(sample, rules, platform, use_rag, localize=False, words=None,
-              rag_profile=None, rag_top_k=None, rag_min_score=None, compact_rules=False):
+              rag_profile=None, rag_top_k=None, rag_min_score=None, compact_rules=False, catalog_rules=False):
     req = {
         "requestId": str(uuid.uuid4()), "articleId": 0, "triggerType": "POST_AUDIT",
         "targetPlatformKey": "local",
@@ -104,6 +104,8 @@ def run_agent(sample, rules, platform, use_rag, localize=False, words=None,
         req["ragMinScore"] = rag_min_score
     if compact_rules:
         req["compactRules"] = True
+    if catalog_rules:
+        req["catalogRules"] = True
     t0 = time.time()
     status, body = http_json(f"{AGENT}/api/agent/audit", "POST", req)
     elapsed = int((time.time() - t0) * 1000)
@@ -272,6 +274,7 @@ def main():
             s, rules, platform, True, words=words,
             rag_profile="compact", rag_top_k=4, rag_min_score=0.55, compact_rules=True)),
         ("E2 B+后置归因", lambda s: run_e2(s, rules, platform, words)),
+        ("E1 B+规则目录", lambda s: run_agent(s, rules, platform, False, words=words, catalog_rules=True)),
         ("D 全量规则+大模型", lambda s: run_agent(s, rules, platform, False, words=words)),
     ]
     if args.localize:

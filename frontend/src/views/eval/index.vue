@@ -30,7 +30,7 @@ const COLOR = {
   muted: '#8b8174',
   line: '#e8dfd2',
 }
-const SCHEME_COLORS = [COLOR.gold, COLOR.primary, COLOR.terracotta, COLOR.sage, COLOR.slate, '#8a6f4d']
+const SCHEME_COLORS = [COLOR.gold, COLOR.primary, COLOR.terracotta, COLOR.sage, COLOR.slate, '#8a6f4d', '#6f8291']
 const PLATFORM_NAMES = {
   xiaohongshu: '小红书',
   wechat: '微信公众号',
@@ -220,6 +220,7 @@ const ruleRecallOption = computed(() => {
     C: COLOR.gold,
     C1: COLOR.terracotta,
     E2: COLOR.sage,
+    E1: '#6f8291',
     D: COLOR.slate,
   }
   return {
@@ -831,7 +832,7 @@ async function runDemo() {
           <section class="panel">
             <div class="panel-head">
               <div>
-                <h2>六个审核方案，谁更稳？</h2>
+                <h2>七个审核方案，谁更稳？</h2>
                 <p>准确率、F1、四级精确匹配与规则召回放在同一张图里；F1 已 ×100。</p>
               </div>
               <span class="chip">{{ audit?.rounds || 1 }} 轮 · {{ audit?.model || '—' }}</span>

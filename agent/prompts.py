@@ -44,7 +44,8 @@ SYSTEM_PROMPT = """你是一名专业的内容审核员，负责判断自媒体�
 
 
 def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool = False,
-                      content_override: str | None = None, compact_rules: bool = False) -> str:
+                      content_override: str | None = None, compact_rules: bool = False,
+                      catalog_rules: bool = False) -> str:
     """把平台约束、规则与待审内容拼成用户提示词。
 
     注意两个标记：【待审核内容】与【输出要求】——
@@ -54,6 +55,7 @@ def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool 
     @param retrieved        是否经过检索：为 True 时注明"这是从规则库检索出的相关条款"
     @param content_override 关键词定位后的内容（节选）；为 None 时用原文
     @param compact_rules    C1 实验：只给规则摘要（编号/名称/类别/等级/短条件），不带法条依据
+    @param catalog_rules    E1 实验：只给编号/名称/类别/等级，连条件也不给
     """
     parts: list[str] = []
 
@@ -71,6 +73,9 @@ def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool 
     # 规则清单
     rule_lines = []
     for r in rules:
+        if catalog_rules:
+            rule_lines.append(f"- [{r.code}] {r.name}（{r.category} / L{r.suggestedLevel}）")
+            continue
         if compact_rules:
             body = " ".join((r.content or "").split())
             if len(body) > 120:
@@ -83,7 +88,10 @@ def build_user_prompt(req: AuditRequest, rules: list[RuleItem], retrieved: bool 
         if r.source:
             line += f"\n  依据：{r.source}"
         rule_lines.append(line)
-    if compact_rules:
+    if catalog_rules:
+        header = ("【规则目录】\n"
+                  "（只列编号/名称/类别/等级；引用时必须使用这些编号，不要编造）")
+    elif compact_rules:
         header = "【审核规则·摘要】"
         if retrieved:
             header += (f"\n（检索出 {len(rules)} 条最相关规则。示例词只是线索；"
