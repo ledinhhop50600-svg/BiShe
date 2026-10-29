@@ -138,8 +138,8 @@ async function onDelete(row) {
           </template>
         </el-table-column>
         <el-table-column prop="viewCount" label="阅读" width="80" />
-        <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column prop="createTime" label="创建时间" width="170" show-overflow-tooltip />
+        <el-table-column label="操作" width="190">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">查看</el-button>
             <el-button

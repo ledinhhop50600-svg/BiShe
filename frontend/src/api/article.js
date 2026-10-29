@@ -23,7 +23,8 @@ export function createArticle(data) {
 }
 
 export function updateArticle(data) {
-  return request.put('/article', data)
+  // 已发布/已下架编辑会自动触发 AI 初审，放宽到 90 秒
+  return request.put('/article', data, { timeout: 90000 })
 }
 
 export function deleteArticle(id) {
@@ -32,7 +33,8 @@ export function deleteArticle(id) {
 
 /** 提交发布申请 */
 export function submitArticle(id) {
-  return request.post(`/article/${id}/submit`)
+  // 提交后后端自动触发 AI 初审，放宽到 90 秒
+  return request.post(`/article/${id}/submit`, null, { timeout: 90000 })
 }
 
 /**

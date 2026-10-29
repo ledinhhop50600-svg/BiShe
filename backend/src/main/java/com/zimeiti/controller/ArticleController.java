@@ -92,11 +92,16 @@ public class ArticleController {
         return Result.ok(articleService.save(dto));
     }
 
-    /** 修改稿件（仅自己的草稿或已驳回稿件） */
+    /** 修改稿件（仅自己的草稿或已驳回稿件；已发布/下架编辑会自动重审） */
     @PutMapping
     @SaCheckPermission(value = {"creator:submit", "article:list"}, mode = SaMode.OR)
-    public Result<Void> update(@Valid @RequestBody ArticleSaveDTO dto) {
+    public Result<Map<String, Object>> update(@Valid @RequestBody ArticleSaveDTO dto) {
+        // 先看修改前状态：已发布/已下架点击“编辑并重审”时，保存后要自动触发一次 AI 初审。
+        ArticleVO before = dto.getId() == null ? null : articleService.detail(dto.getId());
         articleService.update(dto);
+        if (before != null && (before.getStatus() == 2 || before.getStatus() == 5)) {
+            return Result.ok(auditAgentService.audit(dto.getId(), "POST_AUDIT"));
+        }
         return Result.ok();
     }
 
@@ -108,12 +113,12 @@ public class ArticleController {
         return Result.ok();
     }
 
-    /** 提交发布申请：草稿/已驳回 -> 待审核 */
+    /** 提交发布申请：草稿/已驳回 -> 待审核，并自动触发一次 AI 初审 */
     @PostMapping("/{id}/submit")
     @SaCheckPermission("creator:submit")
-    public Result<Void> submit(@PathVariable Long id) {
+    public Result<Map<String, Object>> submit(@PathVariable Long id) {
         articleService.submit(id);
-        return Result.ok();
+        return Result.ok(auditAgentService.audit(id, "POST_AUDIT"));
     }
 
     /** 撤回申请：待审核 -> 草稿 */

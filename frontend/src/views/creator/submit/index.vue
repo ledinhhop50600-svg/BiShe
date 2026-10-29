@@ -109,8 +109,13 @@ async function submitForReview() {
   if (!id) {
     return
   }
-  await submitArticle(id)
-  ElMessage.success('已提交，等待审核')
+  saving.value = true
+  try {
+    await submitArticle(id)
+  } finally {
+    saving.value = false
+  }
+  ElMessage.success('已提交，AI 初审已完成，等待审核员终审')
   router.push('/creator/article')
 }
 

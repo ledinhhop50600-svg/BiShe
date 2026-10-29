@@ -199,6 +199,7 @@ async function onLogout() {
   padding: 10px 0;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .menu :deep(.el-menu-item),
@@ -209,7 +210,7 @@ async function onLogout() {
   border-radius: 10px;
   color: #c3d1cc;
   font-size: 13.5px;
-  transition: all 0.16s ease;
+  transition: background-color 0.16s ease, color 0.16s ease;
 }
 
 .menu :deep(.el-menu-item:hover),

@@ -119,6 +119,9 @@ const demoAccounts = [
   { username: 'admin', role: '超级管理员', desc: '管用户、角色、菜单、规则库、平台清单' },
   { username: 'reviewer', role: '审核员', desc: '处理待审稿件、复核改判、处理举报' },
   { username: 'creator', role: '创作者', desc: '投稿、查看审核反馈、做跨平台适配' },
+  { username: 'creator3', role: '创作者', desc: '持续更新型账号，看板有 8 篇发布记录' },
+  { username: 'creator4', role: '创作者', desc: '阶段更新型账号，4 篇集中发布' },
+  { username: 'creator5', role: '创作者', desc: '新账号，发布记录较少' },
 ]
 
 function fillDemo(account) {
@@ -441,6 +444,10 @@ function fillDemo(account) {
 }
 
 .demo-list {
+  max-height: 286px;
+  overflow-y: auto;
+  padding-right: 4px;
+
   display: flex;
   flex-direction: column;
   gap: 8px;

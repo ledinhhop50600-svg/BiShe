@@ -297,18 +297,33 @@ const auditScatterOption = computed(() => {  const rows = auditRows.value
       {
         type: 'scatter',
         symbolSize: 30,
-        data: rows.map((row, index) => ({
-          name: row.name,
-          value: [row.tokens, row.accuracy],
-          itemStyle: { color: SCHEME_COLORS[index % SCHEME_COLORS.length] },
-        })),
+        data: rows.map((row, index) => {
+          const letter = schemeLetter(row.name)
+          const labelOffset = {
+            A: [0, -12],
+            B: [-30, -18],
+            C1: [-24, 16],
+            C: [0, -24],
+            E2: [30, 18],
+            E1: [24, -16],
+            D: [-24, 16],
+          }[letter] || [0, -10]
+          return {
+            name: row.name,
+            value: [row.tokens, row.accuracy],
+            itemStyle: { color: SCHEME_COLORS[index % SCHEME_COLORS.length] },
+            label: { offset: labelOffset },
+          }
+        }),
         label: {
           show: true,
           position: 'top',
+          distance: 8,
           color: COLOR.ink,
           fontWeight: 600,
           formatter: (p) => schemeLetter(p.data.name),
         },
+        // B/E2 的 token 与准确率非常接近，默认标签会叠在一起；让 ECharts 自动上下错开。
         emphasis: { scale: 1.25 },
       },
     ],

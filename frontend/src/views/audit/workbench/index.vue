@@ -99,6 +99,8 @@ async function loadFeedback(articleId, setDefault = false) {
     feedback.value = await getAuditFeedback(articleId)
     if (setDefault) {
       applyDefaultAction(feedback.value?.record)
+      // 自动初审完成后，把 AI 的处置建议/片段建议直接放进意见框，审核员可继续编辑。
+      fillAgentSuggestion(true)
     }
   } catch {
     feedback.value = null
@@ -137,6 +139,26 @@ async function runAgent() {
   } finally {
     agentLoading.value = false
   }
+}
+
+/** 把智能体的处置建议与违规片段整理进“意见/原因”，审核员可以再改 */
+function fillAgentSuggestion(silent = false) {
+  const r = record.value
+  if (!r) {
+    if (!silent) ElMessage.warning('还没有可用的智能体初审')
+    return
+  }
+  const parts = []
+  if (r.suggestion) parts.push(r.suggestion)
+  for (const v of r.violations || []) {
+    const fragment = v.fragment ? `「${v.fragment}」` : ''
+    const issue = v.issue || ''
+    const suggestion = v.suggestion || ''
+    parts.push(`${fragment}${issue ? '：' + issue : ''}${suggestion ? '；建议：' + suggestion : ''}`)
+  }
+  if (!parts.length && r.reason) parts.push(r.reason)
+  form.reason = parts.join('\n')
+  if (!silent) ElMessage.success('已填入 AI 修改意见，可继续编辑')
 }
 
 async function submit() {
@@ -317,6 +339,9 @@ async function submit() {
                 <el-tag :type="relationType" size="small">{{ relationText }}</el-tag>
               </el-form-item>
               <el-form-item label="意见/原因">
+                <div class="reason-head">
+                  <el-button link type="primary" size="small" @click="fillAgentSuggestion">填入 AI 修改意见</el-button>
+                </div>
                 <el-input
                   v-model="form.reason"
                   type="textarea"
@@ -425,6 +450,13 @@ async function submit() {
 
 .line {
   margin-bottom: 8px;
+}
+
+.reason-head {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-bottom: 4px;
 }
 
 .reason {

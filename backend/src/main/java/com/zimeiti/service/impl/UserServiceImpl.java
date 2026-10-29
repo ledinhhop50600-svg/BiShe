@@ -92,6 +92,9 @@ public class UserServiceImpl implements UserService {
         if (usernameExists(dto.getUsername(), dto.getId())) {
             throw new BizException("账号已被其他用户使用：" + dto.getUsername());
         }
+        if (dto.getId().equals(StpUtil.getLoginIdAsLong()) && Integer.valueOf(0).equals(dto.getStatus())) {
+            throw new BizException(400, "不能禁用当前登录的账号");
+        }
         SysUser user = new SysUser();
         user.setId(dto.getId());
         copy(dto, user);
@@ -124,7 +127,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void updateStatus(Long id, Integer status) {
         if (StpUtil.getLoginIdAsLong() == id) {
-            throw new BizException("不能禁用当前登录的账号");
+            throw new BizException(400, "不能禁用当前登录的账号");
         }
         SysUser user = userMapper.selectById(id);
         if (user == null) {
@@ -164,7 +167,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         if (StpUtil.getLoginIdAsLong() == id) {
-            throw new BizException("不能删除当前登录的账号");
+            throw new BizException(400, "不能删除当前登录的账号");
         }
         SysUser user = userMapper.selectById(id);
         if (user == null) {

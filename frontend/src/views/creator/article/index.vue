@@ -134,8 +134,8 @@ async function openFeedback(row) {
           </template>
         </el-table-column>
         <el-table-column prop="viewCount" label="阅读" width="80" />
-        <el-table-column prop="updateTime" label="更新时间" width="170" />
-        <el-table-column label="操作" width="350" fixed="right">
+        <el-table-column prop="updateTime" label="更新时间" width="170" show-overflow-tooltip />
+        <el-table-column label="操作" width="360">
           <template #default="{ row }">
             <el-button v-if="row.status === 0 || row.status === 3" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status === 0 || row.status === 3" link type="success" @click="onSubmit(row)">提交审核</el-button>

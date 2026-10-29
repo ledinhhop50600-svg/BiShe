@@ -24,6 +24,7 @@ import com.zimeiti.mapper.BizCategoryMapper;
 import com.zimeiti.mapper.BizTagMapper;
 import com.zimeiti.mapper.SysUserMapper;
 import com.zimeiti.service.ArticleService;
+import com.zimeiti.service.AuditAgentService;
 import com.zimeiti.vo.ArticleVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,7 @@ public class ArticleServiceImpl implements ArticleService {
     private final SysUserMapper userMapper;
     private final AuditRecordMapper auditRecordMapper;
     private final AuditReviewMapper auditReviewMapper;
+    private final AuditAgentService auditAgentService;
 
     @Override
     public PageResult<ArticleVO> page(long current, long size, String title, Integer status, Long categoryId) {
@@ -178,6 +180,11 @@ public class ArticleServiceImpl implements ArticleService {
         // 标签整体覆盖
         articleTagMapper.delete(Wrappers.<BizArticleTag>lambdaQuery().eq(BizArticleTag::getArticleId, dto.getId()));
         saveTags(dto.getId(), dto.getTagIds());
+
+        // 已发布/下架稿件编辑后直接进入待审核：自动跑一次初审，创作者不用再等人工点按钮。
+        if (resubmit) {
+            autoAudit(dto.getId());
+        }
     }
 
     @Override
@@ -208,6 +215,9 @@ public class ArticleServiceImpl implements ArticleService {
         // 重新提交时清掉上一次的驳回原因，避免旧反馈误导创作者
         update.setRejectReason("");
         articleMapper.updateById(update);
+
+        // 提交审核后自动跑一次智能体初审，审核员打开工作台即可看到结论。
+        autoAudit(id);
     }
 
     @Override
@@ -380,6 +390,11 @@ public class ArticleServiceImpl implements ArticleService {
     // ------------------------------------------------------------------
     // 以下为内部辅助方法
     // ------------------------------------------------------------------
+
+    private void autoAudit(Long articleId) {
+        // Agent 不可用时 AuditAgentService 会写 agent-failed 记录并返回降级结果，不阻断提交。
+        auditAgentService.audit(articleId, "POST_AUDIT");
+    }
 
     private BizArticle mustGet(Long id) {
         BizArticle article = articleMapper.selectById(id);

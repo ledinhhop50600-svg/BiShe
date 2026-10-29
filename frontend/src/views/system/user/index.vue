@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createUser,
@@ -11,6 +11,7 @@ import {
   updateUserStatus,
 } from '@/api/user'
 import { listRoles } from '@/api/role'
+import { useUserStore } from '@/stores/user'
 
 /**
  * 用户管理页。
@@ -22,6 +23,8 @@ const loading = ref(false)
 const list = ref([])
 const total = ref(0)
 const roles = ref([])
+const userStore = useUserStore()
+const currentUserId = computed(() => userStore.userInfo?.id)
 
 const query = reactive({ pageNum: 1, pageSize: 10, username: '', status: null })
 
@@ -192,6 +195,7 @@ async function onDelete(row) {
               v-model="row.status"
               :active-value="1"
               :inactive-value="0"
+              :disabled="row.id === currentUserId"
               @change="onToggleStatus(row)"
             />
           </template>
@@ -246,10 +250,11 @@ async function onDelete(row) {
           <el-input v-model="form.phone" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-radio-group v-model="form.status">
+          <el-radio-group v-model="form.status" :disabled="form.id === currentUserId">
             <el-radio :value="1">启用</el-radio>
             <el-radio :value="0">禁用</el-radio>
           </el-radio-group>
+          <span v-if="form.id === currentUserId" class="self-hint">不能禁用当前登录账号</span>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" />
@@ -276,6 +281,12 @@ async function onDelete(row) {
 
 .tag {
   margin-right: 4px;
+}
+
+.self-hint {
+  margin-left: 8px;
+  color: #9ca3af;
+  font-size: 12px;
 }
 
 .pagination {
