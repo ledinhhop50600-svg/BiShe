@@ -27,13 +27,18 @@ class BaseProvider:
 
     name: str = "base"
 
-    def judge(self, system_prompt: str, user_prompt: str) -> ProviderResult:  # pragma: no cover
+    def judge(self, system_prompt: str, user_prompt: str,
+              reasoning_effort: str | None = None,
+              max_tokens: int | None = None) -> ProviderResult:  # pragma: no cover
         raise NotImplementedError
 
-    def adapt(self, system_prompt: str, user_prompt: str) -> ProviderResult:
+    def adapt(self, system_prompt: str, user_prompt: str,
+              reasoning_effort: str | None = None,
+              max_tokens: int | None = None) -> ProviderResult:
         """跨平台适配调用。
 
         默认实现与 judge 完全相同 —— 两者本质都是"两段提示词 → 一段 JSON 文本"，
         区别只在提示词内容。单独留一个方法是为了让 Mock 能按适配场景返回不同结构。
         """
-        return self.judge(system_prompt, user_prompt)
+        return self.judge(system_prompt, user_prompt,
+                          reasoning_effort=reasoning_effort, max_tokens=max_tokens)

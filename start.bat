@@ -38,7 +38,7 @@ rem ---------- 2) 后端 ----------
 netstat -ano | findstr ":8080" | findstr "LISTENING" >nul
 if not errorlevel 1 goto backend_running
 echo [2/4] 启动后端 SpringBoot（端口 8080）...
-start "后端 SpringBoot" cmd /k "cd /d %~dp0backend && mvn spring-boot:run"
+start "后端 SpringBoot" cmd /k "cd /d %~dp0backend && start-low-memory.bat"
 goto backend_done
 :backend_running
 echo [2/4] 后端已在运行，跳过启动。要重启请先关闭"后端 SpringBoot"窗口。

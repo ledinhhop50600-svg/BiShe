@@ -82,6 +82,8 @@ def pids_by_port():
             result["agent"] = int(pid)
         elif local.endswith(":5173"):
             result["frontend"] = int(pid)
+        elif local.endswith(":4173"):
+            result["frontendPreview"] = int(pid)
         elif local.endswith(":3306"):
             result["mysql"] = int(pid)
     return result
@@ -171,7 +173,9 @@ def snapshot(label):
             procs[name]["jvm"] = jvm_info(pid)
         if name == "mysql":
             procs[name]["bufferPoolMB"] = mysql_buffer_pool()
-    total = round(sum(p.get("rss", 0) for p in procs.values()), 1)
+    # preview 与 dev 二选一，不重复计入总量
+    total = round(sum(p.get("rss", 0) for k, p in procs.items()
+                      if k != "frontendPreview"), 1)
     return {"label": label, "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "processes": procs, "totalRssMB": total}
 
@@ -335,7 +339,9 @@ def main():
     plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "SimSun", "Arial"]
     plt.rcParams["axes.unicode_minus"] = False
 
-    names = {"backend": "后端 SpringBoot", "agent": "智能体 Python", "frontend": "前端 Vite", "mysql": "MySQL"}
+    names = {"backend": "后端 SpringBoot", "agent": "智能体 Python",
+             "frontend": "前端 Vite（dev）", "frontendPreview": "前端 preview",
+             "mysql": "MySQL"}
     procs = after["processes"]
     labels = [names.get(k, k) for k in procs]
     rss_values = [procs[k].get("rss", 0) for k in procs]
@@ -424,12 +430,17 @@ def main():
         "backend": f"JVM 堆 {jvm.get('heapUsedMB','-')} MB / 已提交 {jvm.get('heapCommittedMB','-')} MB，Metaspace {jvm.get('metaspaceUsedMB','-')} MB，{jvm.get('threads','-')} 个线程",
         "agent": "Python 解释器 + FastAPI/uvicorn + 模型 SDK；按请求处理，不加载本地大模型",
         "frontend": "Vite 开发服务器；生产构建是静态文件，不需要 Node 常驻",
-        "mysql": f"InnoDB Buffer Pool {procs.get('mysql',{}).get('bufferPoolMB','-')} MB + 连接/其他",
+        "mysql": f"InnoDB Buffer Pool {procs.get('mysql',{}).get('bufferPoolMB','-')} MB + performance_schema/连接等",
     }
-    for k in ("backend", "agent", "frontend", "mysql"):
+    for k in ("backend", "agent", "frontend", "frontendPreview", "mysql"):
         p = procs.get(k, {})
+        if not p:
+            continue
+        extra = notes.get(k, "")
+        if k == "frontendPreview":
+            extra = "生产构建的本地预览；与 dev 二选一，不计入合计"
         lines.append(f"| {names.get(k,k)} | {p.get('pid','-')} | {p.get('rss','-')} MB | "
-                     f"{p.get('private','-')} MB | {notes.get(k,'')} |")
+                     f"{p.get('private','-')} MB | {extra} |")
     lines.append(f"\n**合计 RSS：约 {after['totalRssMB']} MB**（RSS 含共享页，进程相加会略大于真实总量）。")
     mysql_rss = procs.get("mysql", {}).get("rss", 0)
     mysql_priv = procs.get("mysql", {}).get("private", 0)
@@ -437,10 +448,21 @@ def main():
     vite_priv = procs.get("frontend", {}).get("private", 0)
     adjusted = round(after["totalRssMB"] - mysql_rss + mysql_priv, 1)
     lines.append(f"\n> **怎么读这两个数**：MySQL 的 WorkingSet（RSS）只有 {mysql_rss} MB，"
-                 f"但 Private 是 {mysql_priv} MB（Buffer Pool 128 MB + 连接/缓存），**以 Private 为准**；"
+                 f"但 Private 是 {mysql_priv} MB（Buffer Pool {procs.get('mysql',{}).get('bufferPoolMB','-')} MB + performance_schema/连接等），**以 Private 为准**；"
                  f"Vite 的 Private {vite_priv} MB 是 Node 预留地址空间，RSS {vite_rss} MB 更接近实际，"
                  f"且生产构建是静态文件、不需要 Node 常驻。"
                  f"把 MySQL 的 Private 计入、Vite 只算 RSS 时，约 **{adjusted} MB**。\n")
+    preview_rss = procs.get("frontendPreview", {}).get("rss", 0)
+    if preview_rss and vite_rss:
+        optimized = round(after["totalRssMB"] - vite_rss + preview_rss, 1)
+        optimized_adj = round(optimized - mysql_rss + mysql_priv, 1)
+        lines.append(f"> **生产预览模式**（关掉 dev、用 `npm run preview`）合计 RSS 约 **{optimized} MB**；"
+                     f"按 MySQL Private 校正约 **{optimized_adj} MB**。\n")
+    lines.append("> **Maven 父进程**：若用 `mvn spring-boot:run`，应用 JVM 之外还会有 Maven 父进程"
+                 "（本次实测约 256 MB RSS，不计入上表）；打包后 `java -jar` 没有这一层，"
+                 "`backend/start-low-memory.bat` 会优先运行 jar。\n")
+    lines.append("> **MySQL 的 Private**：除 Buffer Pool 外还包含 `performance_schema`；"
+                 "本次拆解与可选的全局配置方案见 `docs/性能优化实验.md`。\n")
     lines.append(f"![内存](perf/memory.png)\n")
 
     lines.append("## 二、耗时分配\n")
@@ -473,13 +495,16 @@ def main():
                  f"{total_llm / max(1, precheck['totalMs']) * 100:.0f}%；检索只有 "
                  f"{precheck['steps'].get('retrieve_rules', 0):.0f} ms（规则向量有缓存时几乎为 0）。"
                  "所以优化重点不是数据库，而是模型选择、输出长度与并发。")
-    lines.append("2. **适配是串行的**：3 个平台 = 3 次改写 + 3 次合规预检，耗时约为单平台的 3 倍；"
-                 "如果要更快，应按平台并行，而不是换更快的数据库。")
-    lines.append(f"3. **内存大头是 MySQL 与后端 JVM**：MySQL Private {mysql_priv} MB（Buffer Pool 128 MB），"
+    lines.append("2. **适配已改为并行**：三平台短文从串行约 12.7 s 降到 6.1 s，长文从 21.8 s 降到 9.6 s；"
+                 "生产默认按平台并行。串行/并行、合并调用、通用提示词、思考强度的对比见 "
+                 "`docs/实验-速度优化.md`。")
+    lines.append(f"3. **内存大头是 MySQL 与后端 JVM**：MySQL Private {mysql_priv} MB（Buffer Pool {procs.get('mysql',{}).get('bufferPoolMB','-')} MB + performance_schema/连接等），"
                  f"后端 RSS {b.get('rss','-')} MB（堆 {jvm.get('heapUsedMB','-')} MB、"
                  f"Metaspace {jvm.get('metaspaceUsedMB','-')} MB，其余是线程栈、Code Cache、直接内存与 JVM 自身）；"
                  f"智能体只有 {procs.get('agent',{}).get('rss','-')} MB，因为它不加载本地模型；"
-                 f"前端 {vite_rss} MB 是 Vite 开发服务器，生产构建不需要 Node 常驻。"
+                 f"前端 dev {vite_rss} MB"
+                 + (f"、preview {preview_rss} MB" if preview_rss else "")
+                 + "（开发服务器不进入线上容量）。"
                  f"按 RSS 合计 {after['totalRssMB']} MB，按 MySQL Private 校正约 {adjusted} MB。")
     lines.append("4. **前端 Vite 的内存是开发期开销**：生产构建后是静态文件，不需要 Node 常驻；"
                  "不要把它算进线上容量。")

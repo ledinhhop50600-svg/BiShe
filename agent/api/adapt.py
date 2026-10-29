@@ -1,20 +1,18 @@
 """接口二：跨平台内容适配（对应契约的 /api/agent/adapt）。
 
-一次请求适配多个平台，每个平台做三件事：
-  1. 按平台形态改写（模型）；
-  2. 格式自检（程序算字数 / 标签，确定性）；
-  3. 用目标平台的规则做一次合规预检（复用 judge 的同一套判定逻辑）。
-
-为什么每个平台单独调用模型，而不是让模型一次输出所有平台：
-  - 单个平台的输出更短，不容易被 max_tokens 截断（多平台合并输出曾导致 JSON 不完整）；
-  - 一个平台失败不会污染其他平台的结果，提示词也能写得更具体。
-代价是耗时随平台数线性增长，所以主系统把目标平台限制在 5 个以内。
+默认生产策略：逐平台、并行改写（每个平台一次改写 + 一次合规预检）。
+实验开关（请求里可选，主系统不传）：
+  - strategy=per_platform / unified / generic
+  - parallel=true/false
+  - reasoningEffort=none/low/high
+用于对比"分平台提示词 vs 合并一次调用""串行 vs 并行""关思考 vs 开思考"的速度与质量。
 """
 
 import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -22,7 +20,8 @@ from api.common import check_token
 from config import settings
 from format_check import check_format
 from judge import judge
-from prompts import ADAPT_SYSTEM_PROMPT, build_adapt_prompt
+from prompts import (ADAPT_SYSTEM_PROMPT, ADAPT_UNIFIED_SYSTEM_PROMPT,
+                     build_adapt_prompt, build_unified_adapt_prompt)
 from providers import get_provider
 from providers.base import ProviderError
 from replay import load as replay_load
@@ -34,9 +33,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
-# 适配接口的正文建议上限。即使目标平台允许更长（如公众号 2 万字），
-# 适配产物也只需要保留核心信息 —— 这样既控制输出 token，避免 JSON 被截断，
-# 也符合"跨平台改写"的定位（不是把原文原样搬过去）。
 ADAPT_CONTENT_SOFT_CAP = 3000
 
 
@@ -53,7 +49,9 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
     if not req.title.strip() and not req.content.strip():
         raise HTTPException(status_code=400, detail="invalid_request: title 与 content 不能都为空")
 
-    cache_key = f"{req.requestId}:adapt:{','.join(keys)}"
+    # 缓存键要把实验开关也算进去，否则实验会命中生产缓存
+    cache_key = (f"{req.requestId}:adapt:{req.strategy}:{int(req.parallel)}:"
+                 f"{req.reasoningEffort or 'default'}:{','.join(keys)}")
     cached = replay_load(cache_key)
     if cached is not None:
         cached["replayed"] = True
@@ -61,85 +59,24 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
 
     started = time.time()
     provider = get_provider(settings.provider)
-    results: list[AdaptResult] = []
-    prompt_tokens = completion_tokens = 0
-    model = ""
 
-    for key in keys:
-        platform = platform_map[key]
-        applicable = _rules_for_platform(req, key)
-        started_platform = time.time()
+    if req.strategy == "unified":
+        results, prompt_tokens, completion_tokens, model = _run_unified(
+            provider, req, keys, platform_map)
+    else:
+        def task(key):
+            return _run_platform(provider, req, key, platform_map[key], req.strategy)
 
-        # ---- 1) 改写 ----
-        started_adapt = time.time()
-        try:
-            adapted = provider.adapt(ADAPT_SYSTEM_PROMPT, build_adapt_prompt(req, platform))
-        except ProviderError as e:
-            raise HTTPException(status_code=503, detail=f"model_unavailable: [{key}] {e}") from e
-        adapt_ms = int((time.time() - started_adapt) * 1000)
-        prompt_tokens += adapted.prompt_tokens
-        completion_tokens += adapted.completion_tokens
-        model = adapted.model or model
+        if req.parallel and len(keys) > 1:
+            with ThreadPoolExecutor(max_workers=min(4, len(keys))) as ex:
+                outputs = list(ex.map(task, keys))
+        else:
+            outputs = [task(k) for k in keys]
 
-        title, content, tags = _parse_adapt_output(adapted.text, key)
-        # 模型有时仍会把标签重复写在正文末尾（平台习惯很强）。只要末尾那行全是
-        # 已出现在 tags 字段里的标签，就删掉这一行 —— 否则界面上会显示两遍，
-        # 复制全文时也会重复。只删"完全是标签"的行，不碰正文内容。
-        content = _strip_duplicate_tags(content, tags)
-        # 超过建议上限时按句截断，但**必须如实记入 issues** —— 静默吞掉内容比截断更糟
-        truncated_from = len(content) if len(content) > ADAPT_CONTENT_SOFT_CAP else 0
-        if truncated_from:
-            content = _truncate(content, ADAPT_CONTENT_SOFT_CAP)
-
-        # ---- 2) 格式自检（程序算，结果确定）----
-        fmt = check_format(platform, title, content, tags)
-        if truncated_from:
-            fmt.issues.append(
-                f"正文 {truncated_from} 字，超过适配建议上限 {ADAPT_CONTENT_SOFT_CAP} 字，已按句截断")
-            fmt.passed = False
-
-        # ---- 3) 适配后合规预检（与正式审核同一套逻辑）----
-        # 话题标签也是发布内容的一部分，可能夹带引流词（如 #加微信），必须一起送检。
-        check_content = content + (f"\n\n【话题标签】{' '.join(tags)}" if tags else "")
-        audit_req = AuditRequest(
-            requestId=f"{req.requestId}:chk:{key}",
-            articleId=req.articleId,
-            triggerType="ADAPT_CHECK",
-            targetPlatformKey=key,
-            title=title,
-            content=check_content,
-            platform=platform,
-            rules=applicable,
-        )
-        try:
-            started_compliance = time.time()
-            verdict = judge(audit_req, use_rag=True)
-            compliance_ms = int((time.time() - started_compliance) * 1000)
-        except HTTPException as e:
-            # 把平台带进错误信息，否则多平台请求失败时不知道是哪个平台
-            raise HTTPException(status_code=e.status_code, detail=f"[{key}] {e.detail}") from e
-        prompt_tokens += verdict.usage.promptTokens
-        completion_tokens += verdict.usage.completionTokens
-
-        results.append(AdaptResult(
-            platformKey=key,
-            platformName=platform.platformName,
-            title=title,
-            content=content,
-            tags=tags,
-            durationMs=int((time.time() - started_platform) * 1000),
-            adaptMs=adapt_ms,
-            complianceMs=compliance_ms,
-            formatCheck=fmt,
-            compliance=Compliance(
-                riskLevel=verdict.riskLevel,
-                riskLevelText=verdict.riskLevelText,
-                reason=verdict.reason,
-                hitRules=verdict.hitRules,
-                violations=verdict.violations,
-                suggestion=verdict.suggestion,
-            ),
-        ))
+        results = [o[0] for o in outputs]
+        prompt_tokens = sum(o[1] for o in outputs)
+        completion_tokens = sum(o[2] for o in outputs)
+        model = next((o[3] for o in outputs if o[3]), "")
 
     response = AdaptResponse(
         requestId=req.requestId,
@@ -148,16 +85,188 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
         usage=Usage(promptTokens=prompt_tokens, completionTokens=completion_tokens),
         durationMs=int((time.time() - started) * 1000),
         agentFailed=False,
+        strategy=req.strategy,
+        parallel=req.parallel,
     )
     replay_save(cache_key, response.model_dump())
     return response
 
 
-def _rules_for_platform(req: AdaptRequest, platform_key: str) -> list:
-    """取出适用于某个平台的规则：通用规则 + 该平台专属规则。
+# ----------------------------------------------------------------------
+# 单平台：改写 → 清理 → 格式自检 → 合规预检
+# ----------------------------------------------------------------------
 
-    这里**必须有兜底**：如果规则全被过滤掉，模型会在没有任何依据的情况下给出"通过"，
-    这比报错更危险。所以按"平台规则 → 通用规则 → 全部规则"逐级回退。
+def _run_platform(provider, req: AdaptRequest, key: str, platform,
+                  strategy: str) -> tuple[AdaptResult, int, int, str]:
+    started_platform = time.time()
+    applicable = _rules_for_platform(req, key)
+
+    started_adapt = time.time()
+    try:
+        adapted = provider.adapt(
+            ADAPT_SYSTEM_PROMPT,
+            build_adapt_prompt(req, platform, include_hint=(strategy != "generic")),
+            reasoning_effort=req.reasoningEffort,
+        )
+    except ProviderError as e:
+        raise HTTPException(status_code=503, detail=f"model_unavailable: [{key}] {e}") from e
+    adapt_ms = int((time.time() - started_adapt) * 1000)
+
+    title, content, tags = _parse_single(adapted.text, key)
+    content = _strip_duplicate_tags(content, tags)
+    truncated_from = len(content) if len(content) > ADAPT_CONTENT_SOFT_CAP else 0
+    if truncated_from:
+        content = _truncate(content, ADAPT_CONTENT_SOFT_CAP)
+
+    fmt = check_format(platform, title, content, tags)
+    if truncated_from:
+        fmt.issues.append(
+            f"正文 {truncated_from} 字，超过适配建议上限 {ADAPT_CONTENT_SOFT_CAP} 字，已按句截断")
+        fmt.passed = False
+
+    compliance, c_prompt, c_completion, compliance_ms = _compliance(
+        req, key, platform, applicable, title, content, tags)
+
+    result = AdaptResult(
+        platformKey=key,
+        platformName=platform.platformName,
+        title=title,
+        content=content,
+        tags=tags,
+        durationMs=int((time.time() - started_platform) * 1000),
+        adaptMs=adapt_ms,
+        complianceMs=compliance_ms,
+        formatCheck=fmt,
+        compliance=compliance,
+    )
+    return (result, adapted.prompt_tokens + c_prompt,
+            adapted.completion_tokens + c_completion, adapted.model)
+
+
+# ----------------------------------------------------------------------
+# 合并一次调用（实验用）：一次改写所有平台，再逐平台做格式/合规
+# ----------------------------------------------------------------------
+
+def _run_unified(provider, req: AdaptRequest, keys: list[str], platform_map
+                 ) -> tuple[list[AdaptResult], int, int, str]:
+    platforms = [platform_map[k] for k in keys]
+    started = time.time()
+    try:
+        adapted = provider.adapt(
+            ADAPT_UNIFIED_SYSTEM_PROMPT,
+            build_unified_adapt_prompt(req, platforms),
+            reasoning_effort=req.reasoningEffort,
+        )
+    except ProviderError as e:
+        raise HTTPException(status_code=503, detail=f"model_unavailable: [unified] {e}") from e
+    adapt_ms = int((time.time() - started) * 1000)
+
+    data = _load_json(adapted.text)
+    items = data.get("results") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        logger.error("统一适配输出缺少 results：%s", adapted.text[:400])
+        raise HTTPException(status_code=422,
+                            detail="model_output_invalid: 统一适配结果缺少 results 数组")
+    by_key = {}
+    for item in items:
+        if isinstance(item, dict):
+            by_key[str(item.get("platformKey", ""))] = item
+    missing = [k for k in keys if k not in by_key]
+    if missing:
+        raise HTTPException(status_code=422,
+                            detail=f"model_output_invalid: 统一适配缺少平台 {missing}")
+
+    prepared = []
+    for key in keys:
+        platform = platform_map[key]
+        title, content, tags = _parse_single(json.dumps(by_key[key], ensure_ascii=False), key)
+        content = _strip_duplicate_tags(content, tags)
+        truncated_from = len(content) if len(content) > ADAPT_CONTENT_SOFT_CAP else 0
+        if truncated_from:
+            content = _truncate(content, ADAPT_CONTENT_SOFT_CAP)
+        fmt = check_format(platform, title, content, tags)
+        if truncated_from:
+            fmt.issues.append(
+                f"正文 {truncated_from} 字，超过适配建议上限 {ADAPT_CONTENT_SOFT_CAP} 字，已按句截断")
+            fmt.passed = False
+        prepared.append({
+            "key": key, "platform": platform, "applicable": _rules_for_platform(req, key),
+            "title": title, "content": content, "tags": tags, "fmt": fmt,
+        })
+
+    def comp_task(p):
+        return _compliance(req, p["key"], p["platform"], p["applicable"],
+                           p["title"], p["content"], p["tags"])
+
+    if req.parallel and len(prepared) > 1:
+        with ThreadPoolExecutor(max_workers=min(4, len(prepared))) as ex:
+            comps = list(ex.map(comp_task, prepared))
+    else:
+        comps = [comp_task(p) for p in prepared]
+
+    results = []
+    c_prompt = c_completion = 0
+    for p, (compliance, cp, cc, c_ms) in zip(prepared, comps):
+        c_prompt += cp
+        c_completion += cc
+        results.append(AdaptResult(
+            platformKey=p["key"],
+            platformName=p["platform"].platformName,
+            title=p["title"],
+            content=p["content"],
+            tags=p["tags"],
+            # 改写是共享的一次调用；这里只记该平台的合规耗时，总耗时看响应
+            durationMs=c_ms,
+            adaptMs=0,
+            complianceMs=c_ms,
+            formatCheck=p["fmt"],
+            compliance=compliance,
+        ))
+    logger.info("统一适配：改写 %dms，共享一次调用", adapt_ms)
+    return (results, adapted.prompt_tokens + c_prompt,
+            adapted.completion_tokens + c_completion, adapted.model)
+
+
+# ----------------------------------------------------------------------
+# 公共：合规预检、解析、清理
+# ----------------------------------------------------------------------
+
+def _compliance(req: AdaptRequest, key: str, platform, applicable,
+                title: str, content: str, tags: list[str]):
+    # 话题标签也是发布内容的一部分，可能夹带引流词（如 #加微信），必须一起送检。
+    check_content = content + (f"\n\n【话题标签】{' '.join(tags)}" if tags else "")
+    audit_req = AuditRequest(
+        requestId=f"{req.requestId}:chk:{key}",
+        articleId=req.articleId,
+        triggerType="ADAPT_CHECK",
+        targetPlatformKey=key,
+        title=title,
+        content=check_content,
+        platform=platform,
+        rules=applicable,
+        reasoningEffort=req.reasoningEffort,
+    )
+    started = time.time()
+    try:
+        verdict = judge(audit_req, use_rag=True)
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=f"[{key}] {e.detail}") from e
+    compliance = Compliance(
+        riskLevel=verdict.riskLevel,
+        riskLevelText=verdict.riskLevelText,
+        reason=verdict.reason,
+        hitRules=verdict.hitRules,
+        violations=verdict.violations,
+        suggestion=verdict.suggestion,
+    )
+    return (compliance, verdict.usage.promptTokens, verdict.usage.completionTokens,
+            int((time.time() - started) * 1000))
+
+
+def _rules_for_platform(req: AdaptRequest, platform_key: str) -> list:
+    """通用规则 + 该平台专属规则；没有时按"平台 → 通用 → 全部"逐级回退。
+
+    绝不能出现"没有规则 → 直接通过"，那比报错更危险。
     """
     applicable = [r for r in req.rules if not r.platformKey or r.platformKey == platform_key]
     if applicable:
@@ -166,22 +275,23 @@ def _rules_for_platform(req: AdaptRequest, platform_key: str) -> list:
     return general or list(req.rules)
 
 
-def _parse_adapt_output(text: str, platform_key: str) -> tuple[str, str, list[str]]:
-    """解析模型输出。格式错误返回 422，并保留原始输出便于排查。"""
-    raw = text.strip()
-    # 容忍部分供应商在 JSON 外包 ```json 代码块（DeepSeek 的 json_object 模式不会加，
-    # 但切换到其他兼容供应商时可能会）
+def _load_json(text: str):
+    raw = (text or "").strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```[a-zA-Z]*\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
     try:
-        data = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError as e:
-        logger.error("适配输出无法解析（%s）：%s | 原始输出（前 600 字）：%s",
-                     platform_key, e, text[:600])
-        raise HTTPException(status_code=422,
-                            detail=f"model_output_invalid: [{platform_key}] 适配结果不是合法 JSON") from e
+        logger.error("适配输出无法解析：%s | 原始输出（前 600 字）：%s", e, text[:600])
+        raise HTTPException(status_code=422, detail="model_output_invalid: 适配结果不是合法 JSON") from e
 
+
+def _parse_single(text: str, platform_key: str) -> tuple[str, str, list[str]]:
+    data = _load_json(text)
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422,
+                            detail=f"model_output_invalid: [{platform_key}] 适配结果不是对象")
     title = str(data.get("title") or "").strip()
     content = str(data.get("content") or "").strip()
     tags = _normalize_tags(data.get("tags"))

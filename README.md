@@ -33,7 +33,8 @@
 - **数据看板**：近 14 天投稿与发布趋势、稿件状态环图、智能体风险分布、人工处理分布、
   各平台适配次数、最近审核/稿件动态；按角色返回不同数据；
 - **系统架构页** `/architecture`：拓扑图、一次审核的四步链路、六层分工、代码地图、性能卡片；
-- **性能报告** `docs/性能分析报告.md`：内存与耗时的实测拆分（模型调用占 98% 以上）。
+- **性能报告** `docs/性能分析报告.md`：内存与耗时的实测拆分（模型调用占 98% 以上）；
+- **优化实验** `docs/性能优化实验.md`：内存四个方向（前端/后端/MySQL/Agent）与适配并行、思考强度的代价。
 
 ---
 
@@ -113,6 +114,11 @@
 > `start.bat` 使用 GBK + CRLF（cmd.exe 要求）。不要用编辑器另存为 UTF-8，否则中文会乱码。
 > 本机 JDK17 / Maven 在 `F:\Dev\toolchains`，脚本顶部会自动检测并设置 `JAVA_HOME` / `PATH`；
 > 换机器时改那两行，或把 `bin` 加入系统 PATH（系统默认的 Java 8 跑不了 Spring Boot 4）。
+>
+> **更低内存的启动方式**：先在 `backend/` 执行 `mvn -DskipTests package`，`start-low-memory.bat`
+> 会优先运行打包好的 jar，不再保留 Maven 父进程（省约 225 MB）；没有 jar 时才退回 `mvn spring-boot:run`。
+> 改完后端代码后要重新 `package`，脚本不会自动重编译。
+> 前端演示可以在 `frontend/` 执行 `npm run build && npm run preview`（4173，约 98 MB，替代 222 MB 的 dev server）。
 
 ### 方式 B：手动启动
 
@@ -163,6 +169,8 @@ npm run dev
 ### 后端 `backend/src/main/resources/application.properties`
 
 - `spring.datasource.*`：数据库连接（默认 `zimeiti` / `zimeiti2026`）；
+- `server.tomcat.threads.*` / `spring.datasource.hikari.*`：本地演示的低内存默认值（20/5 与 5/2）；
+  多人并发或上生产时要按负载调大，不要直接沿用；
 - `agent.base-url`：Agent 地址（默认 `http://localhost:8001`）；
 - `agent.timeout-seconds`：审核读超时（30 秒）；适配用独立的 120 秒客户端；
 - `eval.project-root`：评测中心读取 `docs/eval` 的根目录（默认 `..`，即从 `backend/` 启动）。
@@ -221,6 +229,9 @@ python tools/analyze_human_scores.py
 
 # 内存 / 耗时基线（需三端 + MySQL 运行）
 python tools/perf_report.py
+
+# 适配策略与思考强度对照（真实调用模型，约 1-2 分钟）
+python tools/experiment_speed.py
 ```
 
 实验结论与文件索引见 `docs/实验-总览.md`。
@@ -229,12 +240,16 @@ python tools/perf_report.py
 
 | 场景 | 总耗时 | 说明 |
 |---|---|---|
-| 智能体预检 | 3.1 s | 模型调用占 98%，检索命中缓存时接近 0 |
-| 正式初审 | 5.0 s | 模型 + 落库 |
-| 适配 1 / 3 平台 | 3.4 s / 10.6 s | 串行；3 平台约 3 倍 |
-| 常驻内存 | RSS 约 817 MB | MySQL Private 662 MB、后端 209 MB、Agent 74 MB；Vite 499 MB 仅开发期 |
+| 智能体预检 | 3.2 s | 模型调用占 98%，检索命中缓存时接近 0 |
+| 正式初审 | 4.5 s | 模型 + 落库 |
+| 适配 1 / 3 平台 | 2.9 s / 4.4–4.8 s | 三平台按平台并行；串行时 12.7 s |
+| 后端应用 JVM | RSS 173 MB | 小堆 + 串行 GC；`mvn spring-boot:run` 另有 Maven 父进程 256 MB |
+| 前端 | dev 222 MB / preview 98 MB | 生产构建不需要 Vite dev server |
+| 智能体 / MySQL | 75 MB / Private 664 MB | MySQL 的 `performance_schema` 约 231 MB，需全局配置才能降 |
 
-完整拆分（RSS/Private、JVM 堆/Metaspace、改写 vs 合规）见 `docs/性能分析报告.md`。
+应用口径常驻 RSS 约 515 MB；含 Maven 父进程约 771 MB；改用 jar + preview 的演示模式约 422 MB
+（MySQL 按 Private 校正后约 1.0–1.4 GB）。完整拆分、四个方向与代价见
+`docs/性能优化实验.md`，原始数据见 `docs/性能分析报告.md`。
 
 ---
 
@@ -249,7 +264,9 @@ python tools/perf_report.py
 | `docs/适配规则与提示词设计说明.md` | 平台约束、提示词、格式自检 |
 | `docs/decisions-*.md` | 关键决策与理由（多平台、技术栈、工作方式） |
 | `docs/实验-总览.md` | 审核/适配实验结论汇总 |
+| `docs/实验-速度优化.md` | 适配策略（串行/并行/统一/通用）与思考强度的原始数据 |
 | `docs/性能分析报告.md` | 内存占用与耗时分配的实测报告 |
+| `docs/性能优化实验.md` | 内存四个方向的尝试、并行适配与思考强度的代价 |
 | `docs/测试用例与执行记录.md` | 测试用例与执行结果 |
 | `docs/答辩问答-20问.md` | 高频问题与回答 |
 | `docs/答辩演示脚本.md` | 演示顺序、话术、保底方案 |

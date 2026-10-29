@@ -152,15 +152,19 @@ PLATFORM_HINTS = {
 }
 
 
-def build_adapt_prompt(req: AdaptRequest, platform: PlatformInfo) -> str:
-    """把源文章与目标平台约束拼成一条适配请求。"""
+def build_adapt_prompt(req: AdaptRequest, platform: PlatformInfo, include_hint: bool = True) -> str:
+    """把源文章与目标平台约束拼成一条适配请求。
+
+    @param include_hint 是否带上平台形态要点；False 时只保留客观约束，用于对比
+                        "分平台提示词"与"通用提示词"的差异。
+    """
     title_max = platform.titleMaxLen or 0
     if title_max > 0:
         title_line = f"- 标题上限：{title_max} 字（含标点）"
     else:
         title_line = "- 该平台没有独立标题，title 必须返回空字符串"
 
-    hint = PLATFORM_HINTS.get(platform.platformKey, "")
+    hint = PLATFORM_HINTS.get(platform.platformKey, "") if include_hint else ""
     parts = [
         "【目标平台】\n"
         f"{platform.platformName}（{platform.platformKey}）\n"
@@ -174,3 +178,51 @@ def build_adapt_prompt(req: AdaptRequest, platform: PlatformInfo) -> str:
         '{"title": "标题", "content": "正文", "tags": ["#话题1", "#话题2"]}',
     ]
     return "\n\n".join(parts)
+
+
+# 实验用：一次输出多个平台。生产默认仍走 per_platform（逐平台），
+# 这个提示词只用于对比"合并成一次调用"是否更快。
+ADAPT_UNIFIED_SYSTEM_PROMPT = """你是一名跨平台内容改编编辑，负责把同一个作者的一篇源文章，
+一次改写成多个目标平台各自的版本。
+
+【最重要的约束：不编造】
+1. 只能使用源文章中出现的事实、数据、观点、步骤和产品信息。
+2. 不得新增原文没有的数据、价格、功效承诺、用户评价、个人经历或身份。
+3. 不得把"个人体验"改写成"确定效果"。
+
+【合规约束】
+4. 不得保留或引入：绝对化用语、无法核实的价格承诺、具体时限的功效承诺、
+   站外引流、违禁品交易、低俗暗示、未授权转载。
+5. 原文里的风险表述要改写成合规表达；无法改写时删掉该句。
+
+【内容要求】
+6. 每个平台一个版本；平台之间不要互相复制，要按各自形态改写。
+7. 每个版本保留原文的核心信息与关键步骤，不能只写空话。
+8. 遵守各平台的标题/正文字数上限和标签规则；目标长度为上限的 85% 左右。
+9. 话题标签只放在 tags 字段里，不要写进正文。
+10. 必须覆盖请求里的所有平台，顺序一致，不要多输出平台。
+
+只输出 JSON，不要输出任何解释文字：
+{"results": [{"platformKey": "xiaohongshu", "title": "标题", "content": "正文", "tags": ["#话题1"]}]}
+"""
+
+
+def build_unified_adapt_prompt(req: AdaptRequest, platforms: list[PlatformInfo]) -> str:
+    """一次请求多个平台的用户提示词（实验用）。"""
+    lines = []
+    for p in platforms:
+        title_max = p.titleMaxLen or 0
+        title_line = f"标题≤{title_max}字" if title_max > 0 else "无独立标题"
+        hint = PLATFORM_HINTS.get(p.platformKey, "")
+        lines.append(
+            f"- {p.platformKey} / {p.platformName}：{title_line}，正文≤{p.contentMaxLen or 0}字，"
+            f"标签规则：{p.tagRule or '无'}，风格：{p.styleDesc or '无'}"
+            + (f"，改写要点：{hint}" if hint else "")
+        )
+    return "\n\n".join([
+        "【目标平台】\n" + "\n".join(lines),
+        f"【源文章】\n标题：{req.title}\n正文：{req.content}",
+        "【输出要求】\n只输出 JSON："
+        '{"results":[{"platformKey":"...","title":"...","content":"...","tags":["#..."]}]}\n'
+        "必须包含这些 platformKey，顺序一致：" + "、".join(p.platformKey for p in platforms),
+    ])

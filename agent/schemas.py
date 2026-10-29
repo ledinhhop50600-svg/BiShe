@@ -66,6 +66,9 @@ class AuditRequest(BaseModel):
     # 而敏感词库里的短词（"加我微信"）能兜住这种情况。
     sensitiveWords: list[dict] | None = None
 
+    # 仅供速度实验使用：覆盖 .env 的 REASONING_EFFORT（none/low/high），对比思考模式的代价。
+    reasoningEffort: str | None = None
+
 
 # ======================================================================
 # 响应
@@ -133,6 +136,14 @@ class AdaptRequest(BaseModel):
     platforms: list[PlatformInfo] = Field(default_factory=list)
     rules: list[RuleItem] = Field(default_factory=list)
 
+    # 以下三个字段仅供速度实验：不影响主系统调用（不传就是生产默认值）
+    # per_platform：每个平台单独一次改写（当前生产方案）
+    # unified：所有平台合并成一次改写（输出更长，可能更快也可能更慢）
+    # generic：每个平台单独改写，但不给平台形态提示（用于对比“分平台提示词”的价值）
+    strategy: Literal["per_platform", "unified", "generic"] = "per_platform"
+    parallel: bool = True
+    reasoningEffort: str | None = None
+
 
 class FormatCheck(BaseModel):
     """格式自检结果 —— 由程序校验，不交给模型判断（结果必须是确定性的）。"""
@@ -178,6 +189,9 @@ class AdaptResponse(BaseModel):
     usage: Usage = Field(default_factory=Usage)
     durationMs: int = 0
     agentFailed: bool = False
+    # 本次使用的策略（实验/排查用；生产默认 per_platform）
+    strategy: str = "per_platform"
+    parallel: bool = True
     # 契约之外的附加字段，便于测试时辨别回放；Java 侧忽略未知字段
     replayed: bool = False
 

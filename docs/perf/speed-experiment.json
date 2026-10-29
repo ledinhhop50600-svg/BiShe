@@ -1,0 +1,428 @@
+{
+  "generatedAt": "2026-10-29 11:52",
+  "adaptShort": {
+    "分平台 · 串行（原方案）": {
+      "totalMs": 12738.2,
+      "agentMs": 10699.5,
+      "promptTokens": 7262.5,
+      "completionTokens": 1329.0,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 3,
+      "contentLens": [
+        283,
+        457,
+        384
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 3075,
+          "adaptMs": 1903,
+          "complianceMs": 1171,
+          "contentLen": 283,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 4486,
+          "adaptMs": 2781,
+          "complianceMs": 1705,
+          "contentLen": 457,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 3530,
+          "adaptMs": 2267,
+          "complianceMs": 1262,
+          "contentLen": 384,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "分平台 · 并行（当前生产）": {
+      "totalMs": 6136.5,
+      "agentMs": 4074.5,
+      "promptTokens": 7280.0,
+      "completionTokens": 1353.5,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 3,
+      "contentLens": [
+        270,
+        360,
+        420
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 3660,
+          "adaptMs": 2026,
+          "complianceMs": 1633,
+          "contentLen": 270,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 3795,
+          "adaptMs": 2107,
+          "complianceMs": 1687,
+          "contentLen": 360,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 4336,
+          "adaptMs": 2392,
+          "complianceMs": 1943,
+          "contentLen": 420,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "合并一次调用": {
+      "totalMs": 9420.1,
+      "agentMs": 7358.0,
+      "promptTokens": 5500.5,
+      "completionTokens": 1430.0,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 2,
+      "contentLens": [
+        273,
+        392,
+        446
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 1523,
+          "adaptMs": 0,
+          "complianceMs": 1523,
+          "contentLen": 273,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": false
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 1477,
+          "adaptMs": 0,
+          "complianceMs": 1477,
+          "contentLen": 392,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 1521,
+          "adaptMs": 0,
+          "complianceMs": 1521,
+          "contentLen": 446,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "通用提示词 · 并行": {
+      "totalMs": 5717.1,
+      "agentMs": 3663.0,
+      "promptTokens": 6972.5,
+      "completionTokens": 1257.0,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 2,
+      "contentLens": [
+        274,
+        313,
+        393
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 3243,
+          "adaptMs": 1827,
+          "complianceMs": 1416,
+          "contentLen": 274,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 3186,
+          "adaptMs": 1840,
+          "complianceMs": 1346,
+          "contentLen": 313,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 3507,
+          "adaptMs": 2096,
+          "complianceMs": 1409,
+          "contentLen": 393,
+          "formatPassed": true,
+          "tagCount": 4,
+          "shape": false
+        }
+      ]
+    }
+  },
+  "adaptLong": {
+    "长文 · 串行": {
+      "totalMs": 21783.6,
+      "agentMs": 19732,
+      "promptTokens": 12794,
+      "completionTokens": 3124,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 3,
+      "contentLens": [
+        992,
+        2115,
+        656
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 7372,
+          "adaptMs": 4848,
+          "complianceMs": 2523,
+          "contentLen": 992,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 7489,
+          "adaptMs": 6212,
+          "complianceMs": 1276,
+          "contentLen": 2115,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 4871,
+          "adaptMs": 3786,
+          "complianceMs": 1085,
+          "contentLen": 656,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "长文 · 并行": {
+      "totalMs": 9637.1,
+      "agentMs": 7559,
+      "promptTokens": 12889,
+      "completionTokens": 3284,
+      "formatPass": 3,
+      "platforms": 3,
+      "shapeScore": 3,
+      "contentLens": [
+        985,
+        2112,
+        775
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 7116,
+          "adaptMs": 5081,
+          "complianceMs": 2034,
+          "contentLen": 985,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 7556,
+          "adaptMs": 6341,
+          "complianceMs": 1214,
+          "contentLen": 2112,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 6271,
+          "adaptMs": 4262,
+          "complianceMs": 2009,
+          "contentLen": 775,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "长文 · 合并一次": {
+      "totalMs": 17773.0,
+      "agentMs": 15704,
+      "promptTokens": 8851,
+      "completionTokens": 3393,
+      "formatPass": 2,
+      "platforms": 3,
+      "shapeScore": 3,
+      "contentLens": [
+        1022,
+        2154,
+        915
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 1493,
+          "adaptMs": 0,
+          "complianceMs": 1493,
+          "contentLen": 1022,
+          "formatPassed": false,
+          "tagCount": 5,
+          "shape": true
+        },
+        {
+          "key": "wechat",
+          "name": "微信公众号",
+          "durationMs": 1246,
+          "adaptMs": 0,
+          "complianceMs": 1246,
+          "contentLen": 2154,
+          "formatPassed": true,
+          "tagCount": 0,
+          "shape": true
+        },
+        {
+          "key": "douyin",
+          "name": "抖音",
+          "durationMs": 1962,
+          "adaptMs": 0,
+          "complianceMs": 1962,
+          "contentLen": 915,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    }
+  },
+  "reasoning": {
+    "none": {
+      "totalMs": 5626.4,
+      "promptTokens": 1329.0,
+      "completionTokens": 608.5,
+      "riskLevel": 2,
+      "hitRules": 5,
+      "violations": 7
+    },
+    "low": {
+      "totalMs": 8475.5,
+      "promptTokens": 1354.0,
+      "completionTokens": 1136.0,
+      "riskLevel": 2,
+      "hitRules": 6,
+      "violations": 6
+    },
+    "high": {
+      "totalMs": 8577.8,
+      "promptTokens": 1354.0,
+      "completionTokens": 1116.5,
+      "riskLevel": 2,
+      "hitRules": 6,
+      "violations": 7
+    }
+  },
+  "adaptReasoning": {
+    "none": {
+      "totalMs": 5313.4,
+      "agentMs": 3259,
+      "promptTokens": 2378,
+      "completionTokens": 359,
+      "formatPass": 1,
+      "platforms": 1,
+      "shapeScore": 1,
+      "contentLens": [
+        275
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 3259,
+          "adaptMs": 2069,
+          "complianceMs": 1190,
+          "contentLen": 275,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    },
+    "high": {
+      "totalMs": 7159.5,
+      "agentMs": 5118,
+      "promptTokens": 2465,
+      "completionTokens": 665,
+      "formatPass": 1,
+      "platforms": 1,
+      "shapeScore": 1,
+      "contentLens": [
+        328
+      ],
+      "detail": [
+        {
+          "key": "xiaohongshu",
+          "name": "小红书",
+          "durationMs": 5118,
+          "adaptMs": 2037,
+          "complianceMs": 3081,
+          "contentLen": 328,
+          "formatPassed": true,
+          "tagCount": 5,
+          "shape": true
+        }
+      ]
+    }
+  }
+}

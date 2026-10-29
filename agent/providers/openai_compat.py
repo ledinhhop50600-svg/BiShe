@@ -24,8 +24,12 @@ class OpenAICompatProvider(BaseProvider):
             timeout=settings.timeout_seconds,
         )
 
-    def judge(self, system_prompt: str, user_prompt: str) -> ProviderResult:
+    def judge(self, system_prompt: str, user_prompt: str,
+              reasoning_effort: str | None = None,
+              max_tokens: int | None = None) -> ProviderResult:
         started = time.time()
+        effort = reasoning_effort or settings.reasoning_effort
+        tokens = max_tokens or settings.max_output_tokens
         try:
             # response_format={"type": "json_object"} 要求模型只输出 JSON，
             # 大幅减少"输出里夹着解释文字导致解析失败"的情况（DeepSeek 支持该参数）
@@ -39,10 +43,10 @@ class OpenAICompatProvider(BaseProvider):
                 response_format={"type": "json_object"},
                 # 关闭思考模式（默认是 high）：审核不需要长推理，开启会让长文请求既慢又贵，
                 # 更严重的是推理可能耗尽输出预算，导致 content 为空、JSON 解析失败（实测踩过）。
-                reasoning_effort=settings.reasoning_effort,
+                reasoning_effort=effort,
                 # 显式限制输出长度：长文可能命中多处违规，JSON 会变长；
                 # 不设上限时若被截断，JSON 解析会直接失败（契约里对应 422）。
-                max_tokens=settings.max_output_tokens,
+                max_tokens=tokens,
                 timeout=settings.timeout_seconds,
             )
         except APITimeoutError as e:
@@ -68,7 +72,7 @@ class OpenAICompatProvider(BaseProvider):
             )
         if finish == "length":
             raise ProviderError(
-                f"模型输出被截断（finish_reason=length，max_tokens={settings.max_output_tokens}），"
+                f"模型输出被截断（finish_reason=length，max_tokens={tokens}），"
                 f"JSON 不完整"
             )
 

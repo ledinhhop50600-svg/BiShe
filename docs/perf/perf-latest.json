@@ -1,161 +1,171 @@
 {
-  "generatedAt": "2026-10-29 11:28",
+  "generatedAt": "2026-10-29 11:55",
   "memory": {
     "before": {
       "label": "负载前",
-      "at": "2026-10-29 11:28:20",
+      "at": "2026-10-29 11:55:06",
       "processes": {
         "mysql": {
           "pid": 7180,
-          "rss": 34.2,
-          "private": 662.4,
+          "rss": 40.1,
+          "private": 660.9,
           "bufferPoolMB": 128.0
         },
         "backend": {
-          "pid": 94816,
-          "rss": 207.9,
-          "private": 266.8,
+          "pid": 92240,
+          "rss": 166.9,
+          "private": 175.3,
           "jvm": {
-            "heapUsedMB": 46.2,
-            "heapCommittedMB": 80.0,
-            "metaspaceUsedMB": 49.6,
-            "metaspaceCommittedMB": 50.4,
-            "threads": 55,
-            "youngGcCount": 11,
-            "youngGcTimeS": 0.06,
-            "fullGcCount": 0,
-            "fullGcTimeS": 0.0
+            "heapUsedMB": 37.7,
+            "heapCommittedMB": 64.1,
+            "metaspaceUsedMB": 46.5,
+            "metaspaceCommittedMB": 47.2,
+            "threads": 27,
+            "youngGcCount": 19,
+            "youngGcTimeS": 0.1,
+            "fullGcCount": 2,
+            "fullGcTimeS": 0.07
           }
         },
         "agent": {
-          "pid": 95060,
-          "rss": 74.1,
-          "private": 58.2
+          "pid": 100248,
+          "rss": 75.1,
+          "private": 61.1
+        },
+        "frontendPreview": {
+          "pid": 94224,
+          "rss": 98.1,
+          "private": 114.9
         },
         "frontend": {
           "pid": 25072,
-          "rss": 499.4,
-          "private": 1434.6
+          "rss": 222.4,
+          "private": 1445.3
         }
       },
-      "totalRssMB": 815.6
+      "totalRssMB": 504.5
     },
     "after": {
       "label": "负载后",
-      "at": "2026-10-29 11:28:53",
+      "at": "2026-10-29 11:55:33",
       "processes": {
         "mysql": {
           "pid": 7180,
-          "rss": 34.7,
-          "private": 662.5,
+          "rss": 44.2,
+          "private": 664.4,
           "bufferPoolMB": 128.0
         },
         "backend": {
-          "pid": 94816,
-          "rss": 209.2,
-          "private": 268.6,
+          "pid": 92240,
+          "rss": 172.9,
+          "private": 181.2,
           "jvm": {
-            "heapUsedMB": 40.1,
-            "heapCommittedMB": 80.0,
-            "metaspaceUsedMB": 49.8,
-            "metaspaceCommittedMB": 50.6,
-            "threads": 59,
-            "youngGcCount": 12,
-            "youngGcTimeS": 0.06,
-            "fullGcCount": 0,
-            "fullGcTimeS": 0.0
+            "heapUsedMB": 37.0,
+            "heapCommittedMB": 64.1,
+            "metaspaceUsedMB": 49.5,
+            "metaspaceCommittedMB": 50.2,
+            "threads": 31,
+            "youngGcCount": 21,
+            "youngGcTimeS": 0.11,
+            "fullGcCount": 2,
+            "fullGcTimeS": 0.07
           }
         },
         "agent": {
-          "pid": 95060,
-          "rss": 74.2,
-          "private": 58.3
+          "pid": 100248,
+          "rss": 75.1,
+          "private": 61.1
+        },
+        "frontendPreview": {
+          "pid": 94224,
+          "rss": 98.1,
+          "private": 114.9
         },
         "frontend": {
           "pid": 25072,
-          "rss": 499.4,
-          "private": 1434.6
+          "rss": 222.4,
+          "private": 1445.3
         }
       },
-      "totalRssMB": 817.5
+      "totalRssMB": 514.6
     }
   },
   "latency": {
     "login": {
-      "totalMs": 197.5
+      "totalMs": 133.9
     },
     "articlePage": {
-      "totalMs": 86.9
+      "totalMs": 108.4
     },
     "dashboard": {
-      "totalMs": 52.9
+      "totalMs": 59.1
     },
     "precheck": {
-      "totalMs": 3146.1,
-      "agentMs": 3084.5,
+      "totalMs": 3183.2,
+      "agentMs": 3120.0,
       "steps": {
-        "retrieve_rules": 0.5,
-        "llm_judge": 3083.5,
+        "retrieve_rules": 0.0,
+        "llm_judge": 3119.5,
         "locate_violations": 0.0
       },
-      "overheadMs": 61.6,
+      "overheadMs": 63.2,
       "usage": {
         "promptTokens": 1310,
-        "completionTokens": 493
+        "completionTokens": 514
       }
     },
     "audit": {
-      "totalMs": 4993.5,
-      "agentMs": 4940.0,
+      "totalMs": 4516.4,
+      "agentMs": 4455.5,
       "steps": {
         "retrieve_rules": 0.5,
-        "llm_judge": 4939.0,
+        "llm_judge": 4455.0,
         "locate_violations": 0.0
       },
-      "overheadMs": 53.5,
+      "overheadMs": 60.9,
       "usage": {
         "promptTokens": 1363,
-        "completionTokens": 847
+        "completionTokens": 906
       }
     },
     "adapt1": {
-      "totalMs": 3395.2,
-      "agentMs": 3338,
-      "overheadMs": 57.2,
+      "totalMs": 2883.6,
+      "agentMs": 2836,
+      "overheadMs": 47.6,
       "platforms": [
         {
           "name": "小红书",
-          "durationMs": 3337,
-          "adaptMs": 1967,
-          "complianceMs": 1370,
+          "durationMs": 2836,
+          "adaptMs": 1693,
+          "complianceMs": 1143,
           "formatPassed": true
         }
       ]
     },
     "adapt3": {
-      "totalMs": 10648.4,
-      "agentMs": 10562,
-      "overheadMs": 86.4,
+      "totalMs": 4815.8,
+      "agentMs": 4741,
+      "overheadMs": 74.8,
       "platforms": [
         {
           "name": "小红书",
-          "durationMs": 2835,
-          "adaptMs": 1800,
-          "complianceMs": 1034,
+          "durationMs": 2903,
+          "adaptMs": 1810,
+          "complianceMs": 1092,
           "formatPassed": true
         },
         {
           "name": "微信公众号",
-          "durationMs": 3763,
-          "adaptMs": 2132,
-          "complianceMs": 1630,
+          "durationMs": 3354,
+          "adaptMs": 2255,
+          "complianceMs": 1099,
           "formatPassed": true
         },
         {
           "name": "抖音",
-          "durationMs": 3964,
-          "adaptMs": 2352,
-          "complianceMs": 1612,
+          "durationMs": 4736,
+          "adaptMs": 3085,
+          "complianceMs": 1650,
           "formatPassed": true
         }
       ]

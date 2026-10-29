@@ -223,23 +223,23 @@ const principles = [
     <section class="arch-card perf-card fade-up">
       <div class="section-head">
         <b>性能实测</b>
-        <span>单机演示环境 · 2026-10-29 · 详细报告见 docs/性能分析报告.md</span>
+        <span>单机演示环境 · 2026-10-29 · 详见 docs/性能优化实验.md</span>
       </div>
       <div class="perf-grid">
         <div class="perf-item">
-          <b>3.1s</b>
+          <b>3.2s</b>
           <span>单次预检</span>
           <small>模型调用占 98%</small>
         </div>
         <div class="perf-item">
-          <b>10.6s</b>
+          <b>4–5s</b>
           <span>三平台适配</span>
-          <small>改写 + 合规预检，串行</small>
+          <small>按平台并行；串行 12.7s</small>
         </div>
         <div class="perf-item">
-          <b>≈1.4GB</b>
-          <span>常驻内存</span>
-          <small>含 MySQL Private；Vite 仅开发期</small>
+          <b>≈1.0GB</b>
+          <span>演示模式内存</span>
+          <small>jar + preview + MySQL Private</small>
         </div>
       </div>
     </section>

@@ -33,7 +33,9 @@ CONTENT_END = "【输出要求】"
 class MockProvider(BaseProvider):
     name = "mock"
 
-    def judge(self, system_prompt: str, user_prompt: str) -> ProviderResult:
+    def judge(self, system_prompt: str, user_prompt: str,
+              reasoning_effort: str | None = None,
+              max_tokens: int | None = None) -> ProviderResult:
         article = _extract_article(user_prompt)
         hits = []
         for word, code, name, category, issue in KEYWORDS:
@@ -77,7 +79,9 @@ class MockProvider(BaseProvider):
             completion_tokens=0,
         )
 
-    def adapt(self, system_prompt: str, user_prompt: str) -> ProviderResult:
+    def adapt(self, system_prompt: str, user_prompt: str,
+              reasoning_effort: str | None = None,
+              max_tokens: int | None = None) -> ProviderResult:
         """无 Key 时的确定性适配：截断到平台上限 + 生成固定数量的标签。
 
         它不追求"改写得像人"，只保证整条链路（格式自检、合规预检、落库、界面）

@@ -67,7 +67,8 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
         provider = get_provider(settings.provider)
         user_prompt = build_user_prompt(req, rules, retrieved,
                                         content_override=content_text if localize_flag else None)
-        result = provider.judge(SYSTEM_PROMPT, user_prompt)
+        result = provider.judge(SYSTEM_PROMPT, user_prompt,
+                                reasoning_effort=req.reasoningEffort)
     except ProviderError as e:
         # 契约约定：模型不可用返回 503，由主系统降级到人工审核
         raise HTTPException(status_code=503, detail=f"model_unavailable: {e}") from e

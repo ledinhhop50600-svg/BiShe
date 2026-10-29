@@ -19,6 +19,16 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    // 生产构建的本地预览：不跑 Vite dev 的模块转换与 HMR，内存明显更低。
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: process.env.VITE_BACKEND_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
