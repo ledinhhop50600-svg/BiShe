@@ -115,7 +115,8 @@ def _all_terms(rules: list[RuleItem], extra_terms: list[str] | None = None) -> l
 
 
 def retrieve(rules: list[RuleItem], query: str, top_k: int,
-             extra_terms: list[str] | None = None) -> tuple[list[RuleItem], str]:
+             extra_terms: list[str] | None = None,
+             profile: str = "legacy", min_score: float = 0.0) -> tuple[list[RuleItem], str]:
     """从规则中召回与 query 最相关的 top_k 条。
 
     采用**混合检索**：词面命中优先 + 向量检索补足。
@@ -123,6 +124,10 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int,
     向量会被功效类语义带偏，导致"绝对化用语"（AD-001）排不进前 6 名 —— 而它明明词面命中。
     合规场景里"规则列出的示例词出现在内容中"是极强的信号，不能交给相似度去赌。
     因此：规则引号内的示例词只要在正文中出现，该规则优先入选；剩余名额按分段向量相似度补足。
+
+    profile:
+      - legacy：保留原行为（关键词命中全部优先，top_k 直接截断），用于复现 C 基线；
+      - compact：C1 修复版（关键词限流+排序、向量阈值、类别去重、规则卡片）。
 
     @return (召回结果, 说明文字) —— 说明文字会写进 trace，便于演示与排查。
     @throws EmbeddingError 向量化失败（调用方应降级为使用全部规则）
@@ -140,22 +145,56 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int,
     meta_codes = {r.code for r in meta_rules}
 
     # ---- 2) 词面兜底（只在非元规则里做）----
-    all_terms = _all_terms(rules, extra_terms)
+    # legacy 会把敏感词库也套到每条规则上；compact 只使用规则自己的示例词，
+    # 且敏感词必须也出现在该规则正文里，避免"一个敏感词命中所有规则"
+    # （C 基线里 M1 出现 15 条规则同时命中）。
+    extra_set = {t for t in (extra_terms or []) if t}
+    term_df: dict[str, int] = {}
+    if profile == "compact":
+        for r in rules:
+            for t in set(_keyword_terms(r)):
+                term_df[t] = term_df.get(t, 0) + 1
+            for t in extra_set:
+                if t in (r.content or ""):
+                    term_df[t] = term_df.get(t, 0) + 1
+
     keyword_hits: list[tuple[int, RuleItem, list[str]]] = []
     for r in rules:
         if r.code in meta_codes:
             continue
-        hits = [t for t in _all_terms([r], extra_terms) if t in query]
+        if profile == "compact":
+            terms = _keyword_terms(r)
+            hits = [t for t in terms if t in query]
+            for t in extra_set:
+                if t in query and t in (r.content or "") and t not in hits:
+                    hits.append(t)
+        else:
+            hits = [t for t in _all_terms([r], extra_terms) if t in query]
         if hits:
             keyword_hits.append((len(hits), r, hits))
-    keyword_hits.sort(key=lambda item: item[0], reverse=True)
-    forced = meta_rules + [r for _, r, _ in keyword_hits]
+
+    if profile == "compact":
+        # 关键词命中按“词的特异性”排序：在越少规则里出现的词，权重越高；
+        # 最多保留 top_k - 元规则 条，避免十几条弱相关规则把向量结果全部挤掉。
+        def kw_score(hits: list[str]) -> float:
+            return sum((len(t) ** 1.5) / max(1, term_df.get(t, 1)) for t in hits)
+
+        keyword_hits.sort(
+            key=lambda item: (kw_score(item[2]), max(len(t) for t in item[2]), item[0]),
+            reverse=True,
+        )
+        max_keyword = max(0, top_k - len(meta_rules))
+        forced = meta_rules + [r for _, r, _ in keyword_hits[:max_keyword]]
+    else:
+        keyword_hits.sort(key=lambda item: item[0], reverse=True)
+        forced = meta_rules + [r for _, r, _ in keyword_hits]
     forced_codes = {r.code for r in forced}
 
     # ---- 3) 分段向量检索（只对未被词面命中的规则打分）----
     queries = _chunks(query)
     candidates = [r for r in rules if r.code not in forced_codes]
     vector_ranked: list[tuple[float, RuleItem]] = []
+    vector_all: list[tuple[float, RuleItem]] = []
 
     if candidates and len(forced) < top_k:
         missing = [r for r in candidates if _rule_key(r) not in _rule_cache]
@@ -168,16 +207,55 @@ def retrieve(rules: list[RuleItem], query: str, top_k: int,
         for r in candidates:
             rv = _rule_cache[_rule_key(r)]
             best = max(_cosine(qv, rv) for qv in query_vecs)
-            vector_ranked.append((best, r))
+            vector_all.append((best, r))
+            if profile != "compact" or best >= min_score:
+                vector_ranked.append((best, r))
         vector_ranked.sort(key=lambda pair: pair[0], reverse=True)
+        vector_all.sort(key=lambda pair: pair[0], reverse=True)
 
     # ---- 4) 合并：元规则 + 词面命中 优先，向量分数补足 ----
-    picked = (forced + [r for _, r in vector_ranked])[:top_k]
+    fallback_used = False
+    if profile == "compact":
+        # 类别去重：同一类别最多 2 条，避免 AD-001/002/003 占满名额；多类样本仍能覆盖多个类别。
+        picked: list[RuleItem] = []
+        seen: set[str] = set()
+        category_count: dict[str, int] = {}
+        for r in forced + [r for _, r in vector_ranked]:
+            if r.code in seen:
+                continue
+            category = r.category or "其他"
+            if category_count.get(category, 0) >= 2:
+                continue
+            picked.append(r)
+            seen.add(r.code)
+            category_count[category] = category_count.get(category, 0) + 1
+            if len(picked) >= top_k:
+                break
+
+        # 召回安全阀：短评论没有词面命中时，向量分可能普遍低于阈值；
+        # 如果只剩元规则，补 2 条未过阈值但分数最高的规则，避免“漏掉整类违规”。
+        if len(picked) <= len(meta_rules) and vector_all:
+            fallback_used = True
+            for _, r in vector_all:
+                if r.code in seen:
+                    continue
+                category = r.category or "其他"
+                if category_count.get(category, 0) >= 2:
+                    continue
+                picked.append(r)
+                seen.add(r.code)
+                category_count[category] = category_count.get(category, 0) + 1
+                if len(picked) >= min(top_k, len(meta_rules) + 2):
+                    break
+    else:
+        picked = (forced + [r for _, r in vector_ranked])[:top_k]
 
     meta_detail = "、".join(r.code for r in meta_rules) or "无"
     kw_detail = "、".join(f"{r.code}←{'/'.join(hits[:2])}" for _, r, hits in keyword_hits) or "无"
     vec_detail = "、".join(f"{r.code}({s:.2f})" for s, r in vector_ranked[: max(0, top_k - len(forced))]) or "无"
-    detail = (f"从 {len(rules)} 条规则中召回 {len(picked)} 条 | 元规则：{meta_detail} | "
+    threshold = f" | 阈值 {min_score:.2f}" if profile == "compact" else ""
+    fallback_note = " | 召回安全阀：补低分向量规则" if fallback_used else ""
+    detail = (f"[{profile}] 从 {len(rules)} 条规则中召回 {len(picked)} 条{threshold}{fallback_note} | 元规则：{meta_detail} | "
               f"词面命中：{kw_detail} | 向量补足：{vec_detail} | 分段 {len(queries)} 路")
     return picked, detail
 

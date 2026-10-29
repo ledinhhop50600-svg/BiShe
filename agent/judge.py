@@ -36,11 +36,15 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
     rules = list(req.rules)
     retrieved = False
     rag_enabled = settings.rag_enabled if use_rag is None else use_rag
-    if rag_enabled and len(rules) > settings.rag_top_k:
+    top_k = req.ragTopK or settings.rag_top_k
+    min_score = req.ragMinScore if req.ragMinScore is not None else 0.0
+    if rag_enabled and len(rules) > top_k:
         started_retrieve = time.time()
         try:
-            rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k,
-                                     extra_terms=extra_terms)
+            # C1 修复点：不再截到 2000 字，长文后半段也参与规则召回（内部按 300 字切块）。
+            rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:6000], top_k,
+                                     extra_terms=extra_terms, profile=req.ragProfile,
+                                     min_score=min_score)
             retrieved = True
             trace.append(TraceStep(step=1, action="retrieve_rules", output=detail,
                                    durationMs=int((time.time() - started_retrieve) * 1000)))
@@ -66,7 +70,8 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
     try:
         provider = get_provider(settings.provider)
         user_prompt = build_user_prompt(req, rules, retrieved,
-                                        content_override=content_text if localize_flag else None)
+                                        content_override=content_text if localize_flag else None,
+                                        compact_rules=req.compactRules)
         result = provider.judge(SYSTEM_PROMPT, user_prompt,
                                 reasoning_effort=req.reasoningEffort)
     except ProviderError as e:
@@ -87,6 +92,9 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
     if level not in (0, 1, 2, 3):
         raise HTTPException(status_code=422, detail=f"model_output_invalid: riskLevel 越界（{level}）")
 
+    # 引用校验：只接受本次真正提供给模型的规则编号。
+    # 模型可能编造 AD-ABSOLUTE 这类库里不存在的代码；宁可丢弃，也不要把幻觉写进审核记录。
+    allowed_codes = {r.code for r in rules}
     hit_rules = [
         HitRule(
             code=str(r.get("code", "")),
@@ -95,6 +103,7 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
             source=r.get("source"),
         )
         for r in (data.get("hitRules") or [])
+        if str(r.get("code", "")) in allowed_codes
     ]
     violations = [
         Violation(

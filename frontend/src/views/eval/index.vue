@@ -30,7 +30,7 @@ const COLOR = {
   muted: '#8b8174',
   line: '#e8dfd2',
 }
-const SCHEME_COLORS = [COLOR.gold, COLOR.primary, COLOR.terracotta, COLOR.sage, COLOR.slate]
+const SCHEME_COLORS = [COLOR.gold, COLOR.primary, COLOR.terracotta, COLOR.sage, COLOR.slate, '#8a6f4d']
 const PLATFORM_NAMES = {
   xiaohongshu: '小红书',
   wechat: '微信公众号',
@@ -89,18 +89,32 @@ function platformRows(source) {
 }
 
 const auditRows = computed(() => audit.value?.schemes || [])
+const schemeLetters = computed(() => auditRows.value.map((row) => schemeLetter(row.name)))
 const tierRows = computed(() => audit.value?.tiers || [])
 const comparisonRows = computed(() => audit.value?.comparison || [])
 const adaptationRows = computed(() => platformRows(adaptation.value))
 const demoRows = computed(() => platformRows(demo.value))
 
-const bestScheme = computed(() =>
-  auditRows.value.reduce((best, row) => (!best || row.accuracy > best.accuracy ? row : best), null)
+const bestCoreScheme = computed(() =>
+  auditRows.value.reduce((best, row) => {
+    const value = row.core?.accuracy ?? row.accuracy ?? 0
+    const bestValue = best ? (best.core?.accuracy ?? best.accuracy ?? 0) : -1
+    return value > bestValue ? row : best
+  }, null)
+)
+const bestPublicScheme = computed(() =>
+  auditRows.value.reduce((best, row) => {
+    const value = row.public?.accuracy ?? 0
+    const bestValue = best ? (best.public?.accuracy ?? 0) : -1
+    return value > bestValue ? row : best
+  }, null)
 )
 
 const datasetTotal = computed(() => audit.value?.dataset?.total ?? 0)
 const selfBuilt = computed(() => audit.value?.dataset?.selfBuilt ?? 0)
 const publicSet = computed(() => audit.value?.dataset?.public ?? 0)
+const toxicnCount = computed(() => audit.value?.dataset?.toxicn ?? 0)
+const coldCount = computed(() => audit.value?.dataset?.cold ?? 0)
 
 const shortStrategies = computed(() =>
   Object.entries(speed.value?.adaptShort || {}).map(([name, row]) => ({ name, ...row }))
@@ -113,9 +127,6 @@ const parallelSeconds = computed(() =>
 )
 const serialRow = computed(() =>
   shortStrategies.value.find((row) => row.name.includes('串行'))
-)
-const bestAccuracy = computed(() =>
-  bestScheme.value ? `${Math.round(bestScheme.value.accuracy)}%` : '—'
 )
 
 const reasoningRows = computed(() =>
@@ -203,8 +214,14 @@ const auditBarOption = computed(() => {
 })
 
 const ruleRecallOption = computed(() => {
-  const rows = auditRows.value.filter((row) => ['B', 'C', 'D'].includes(schemeLetter(row.name)))
-  const colors = { B: COLOR.primary, C: COLOR.terracotta, D: COLOR.sage }
+  const rows = auditRows.value.filter((row) => !['A'].includes(schemeLetter(row.name)))
+  const colors = {
+    B: COLOR.primary,
+    C: COLOR.gold,
+    C1: COLOR.terracotta,
+    E2: COLOR.sage,
+    D: COLOR.slate,
+  }
   return {
     tooltip: {
       trigger: 'axis',
@@ -340,8 +357,61 @@ const tierOption = computed(() => {
   }
 })
 
+const splitOption = computed(() => {
+  const rows = auditRows.value
+  return {
+    color: [COLOR.primary, COLOR.gold],
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (items) => {
+        const index = items[0]?.dataIndex ?? 0
+        const row = rows[index]
+        if (!row) return ''
+        return `${row.name}<br/>核心集准确率：${row.core?.accuracy ?? '-'}%（召回 ${row.core?.recall ?? '-'}%）<br/>公开集准确率：${row.public?.accuracy ?? '-'}%（召回 ${row.public?.recall ?? '-'}%）`
+      },
+    },
+    legend: {
+      top: 0,
+      itemWidth: 9,
+      itemHeight: 9,
+      textStyle: { color: COLOR.muted, fontSize: 11 },
+    },
+    grid: { left: 42, right: 16, top: 38, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: rows.map((row) => schemeLetter(row.name)),
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: COLOR.line } },
+      axisLabel: { color: COLOR.ink, fontWeight: 600 },
+    },
+    yAxis: {
+      type: 'value',
+      max: 100,
+      axisLabel: { color: COLOR.muted, formatter: '{value}%' },
+      splitLine: { lineStyle: { color: '#f1eae0' } },
+    },
+    series: [
+      {
+        name: '核心集准确率',
+        type: 'bar',
+        barMaxWidth: 18,
+        data: rows.map((row) => row.core?.accuracy ?? 0),
+        itemStyle: { borderRadius: [4, 4, 0, 0] },
+      },
+      {
+        name: '公开集准确率',
+        type: 'bar',
+        barMaxWidth: 18,
+        data: rows.map((row) => row.public?.accuracy ?? 0),
+        itemStyle: { borderRadius: [4, 4, 0, 0] },
+      },
+    ],
+  }
+})
+
 const datasetOption = computed(() => ({
-  color: [COLOR.primary, COLOR.gold],
+  color: [COLOR.primary, COLOR.gold, COLOR.sage],
   tooltip: { trigger: 'item', formatter: '{b}：{c} 条（{d}%）' },
   legend: {
     bottom: 0,
@@ -352,15 +422,16 @@ const datasetOption = computed(() => ({
   series: [
     {
       type: 'pie',
-      radius: ['46%', '68%'],
-      center: ['50%', '44%'],
+      radius: ['42%', '66%'],
+      center: ['50%', '42%'],
       avoidLabelOverlap: true,
       itemStyle: { borderColor: '#fffdf8', borderWidth: 3 },
       label: { color: COLOR.ink, fontSize: 10, formatter: '{d}%' },
       labelLine: { length: 7, length2: 5 },
       data: [
-        { name: '自建样本', value: selfBuilt.value },
-        { name: '公开集 ToxiCN', value: publicSet.value },
+        { name: '核心自建', value: selfBuilt.value },
+        { name: 'ToxiCN', value: toxicnCount.value },
+        { name: 'COLD', value: coldCount.value },
       ],
     },
   ],
@@ -730,12 +801,15 @@ async function runDemo() {
       <div class="kpi">
         <span>评测样本</span>
         <b>{{ datasetTotal || '—' }}<small>条</small></b>
-        <em>自建 {{ selfBuilt }} + 公开 {{ publicSet }}</em>
+        <em>自建 {{ selfBuilt }} + ToxiCN {{ toxicnCount }} + COLD {{ coldCount }}</em>
       </div>
       <div class="kpi">
-        <span>最佳准确率</span>
-        <b>{{ bestAccuracy }}</b>
-        <em>{{ bestScheme?.name || '等待实验结果' }}</em>
+        <span>核心集最佳</span>
+        <b>{{ bestCoreScheme ? Math.round(bestCoreScheme.core?.accuracy ?? bestCoreScheme.accuracy) + '%' : '—' }}</b>
+        <em>
+          公开集最高 {{ bestPublicScheme?.name?.split(' ')[0] || '—' }}
+          {{ bestPublicScheme?.public?.accuracy ?? '—' }}%
+        </em>
       </div>
       <div class="kpi">
         <span>适配格式通过</span>
@@ -757,7 +831,7 @@ async function runDemo() {
           <section class="panel">
             <div class="panel-head">
               <div>
-                <h2>四个审核方案，谁更稳？</h2>
+                <h2>六个审核方案，谁更稳？</h2>
                 <p>准确率、F1、四级精确匹配与规则召回放在同一张图里；F1 已 ×100。</p>
               </div>
               <span class="chip">{{ audit?.rounds || 1 }} 轮 · {{ audit?.model || '—' }}</span>
@@ -772,7 +846,7 @@ async function runDemo() {
                 <h2>质量与成本，拐点在哪？</h2>
                 <p>横轴是每条样本的平均 token，纵轴是准确率；越靠左上越划算。</p>
               </div>
-              <span class="chip">A → D</span>
+              <span class="chip">6 方案</span>
             </div>
             <ChartBox v-if="auditRows.length" :option="auditScatterOption" height="300px" />
             <el-empty v-else description="等待实验数据" :image-size="70" />
@@ -826,6 +900,17 @@ async function runDemo() {
           <el-empty v-else description="等待实验结果" :image-size="70" />
         </section>
 
+        <section class="panel wide">
+          <div class="panel-head">
+            <div>
+              <h2>核心集 vs 公开集</h2>
+              <p>核心集 28 条是广告/引流/违禁/分级边界等业务硬样本；公开集 400 条是 ToxiCN + COLD 短评论，用来扩大统计量，不能替代业务分布。</p>
+            </div>
+            <span class="chip">核心 {{ audit?.dataset?.core ?? 28 }} · 公开 {{ publicSet }}</span>
+          </div>
+          <ChartBox v-if="auditRows.length" :option="splitOption" height="280px" />
+        </section>
+
         <div class="grid-2">
           <section class="panel">
             <div class="panel-head">
@@ -835,7 +920,7 @@ async function runDemo() {
           </section>
           <section class="panel">
             <div class="panel-head">
-              <div><h2>口径前后对照</h2><p>严格 v3 与放宽 v4 的历史值；排序会变，规则能力不会。</p></div>
+              <div><h2>口径前后对照</h2><p>严格 v3 与扩展集（v5）的对照；样本变了，排序也会变，规则能力不会。</p></div>
             </div>
             <div v-if="comparisonRows.length" class="compare-list">
               <div v-for="row in comparisonRows" :key="row.scheme" class="compare-item">
@@ -846,7 +931,7 @@ async function runDemo() {
                 </div>
                 <b>{{ row.strictV3 ?? '—' }}% → {{ row.relaxedV4 }}%</b>
               </div>
-              <div class="compare-legend"><i class="strict"></i>严格 v3 <i class="relaxed"></i>放宽 v4</div>
+              <div class="compare-legend"><i class="strict"></i>严格 v3 <i class="relaxed"></i>扩展集 v5</div>
             </div>
             <el-empty v-else description="没有历史口径数据" :image-size="60" />
           </section>
@@ -1033,6 +1118,8 @@ async function runDemo() {
           <el-table :data="auditRows" size="small" border>
             <el-table-column prop="name" label="方案" min-width="160" />
             <el-table-column prop="accuracy" label="准确率 %" width="100" />
+            <el-table-column prop="recall" label="违规召回 %" width="105" />
+            <el-table-column prop="falsePositives" label="误报数" width="90" />
             <el-table-column prop="f1" label="F1" width="80" />
             <el-table-column prop="exactMatch" label="四级精确 %" width="110" />
             <el-table-column prop="ruleRecall" label="规则召回 %" width="110" />
@@ -1050,10 +1137,13 @@ async function runDemo() {
           </div>
           <el-table :data="tierRows" size="small" border>
             <el-table-column prop="name" label="层级" min-width="220" />
-            <el-table-column prop="A" label="A 关键词" width="100" />
-            <el-table-column prop="B" label="B 纯大模型" width="110" />
-            <el-table-column prop="C" label="C RAG" width="100" />
-            <el-table-column prop="D" label="D 全量规则" width="110" />
+            <el-table-column
+              v-for="letter in schemeLetters"
+              :key="letter"
+              :prop="letter"
+              :label="letter"
+              width="96"
+            />
           </el-table>
         </section>
 

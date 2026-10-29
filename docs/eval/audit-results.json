@@ -1,64 +1,181 @@
 {
-  "generatedAt": "2026-10-29 13:09",
+  "generatedAt": "2026-10-29 14:35",
   "dataset": {
-    "total": 52,
+    "total": 428,
     "selfBuilt": 28,
-    "public": 24,
+    "public": 400,
+    "toxicn": 200,
+    "cold": 200,
+    "core": 28,
     "labelPolicy": "放宽口径（2026-10-19 裁决后的 5 条标签）",
-    "publicSource": "ToxiCN (ACL 2023)，正负各 12 条"
+    "publicSource": "ToxiCN (ACL 2023) + COLD (EMNLP 2022)"
   },
   "model": "deepseek-flash",
   "thinking": "关闭（reasoning_effort=none）",
   "rounds": 1,
-  "note": "v4 复测（本轮）；结构化结果由 tools/experiment_compare.py 生成",
+  "note": "扩展评测集复测；结构化结果由 tools/experiment_compare.py 生成",
   "schemes": [
     {
       "name": "A 关键词规则",
-      "accuracy": 57.7,
-      "f1": 0.39,
+      "accuracy": 50.5,
+      "f1": 0.07,
+      "recall": 3.8,
+      "precision": 50.0,
+      "falsePositives": 8.0,
+      "falseNegatives": 204.0,
       "exactMatch": 53.6,
       "ruleRecall": 0.0,
       "tokens": 0,
       "cost": 0.0,
       "durationMs": 0,
       "errors": 0,
-      "fragmentValidity": 100.0
+      "fragmentValidity": 100.0,
+      "core": {
+        "n": 28,
+        "accuracy": 64.3,
+        "recall": 58.3
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 49.5,
+        "recall": 0.5,
+        "f1": 0.01
+      }
     },
     {
       "name": "B 纯大模型",
-      "accuracy": 80.8,
-      "f1": 0.74,
+      "accuracy": 67.1,
+      "f1": 0.55,
+      "recall": 40.1,
+      "precision": 85.9,
+      "falsePositives": 14.0,
+      "falseNegatives": 127.0,
       "exactMatch": 92.9,
       "ruleRecall": 0.0,
-      "tokens": 997,
-      "cost": 0.00156,
-      "durationMs": 1887,
+      "tokens": 953,
+      "cost": 0.00146,
+      "durationMs": 1779,
       "errors": 0,
-      "fragmentValidity": 100.0
+      "fragmentValidity": 99.7,
+      "core": {
+        "n": 28,
+        "accuracy": 96.4,
+        "recall": 91.7
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 65.0,
+        "recall": 37.0,
+        "f1": 0.51
+      }
     },
     {
-      "name": "C RAG+大模型",
-      "accuracy": 75.0,
-      "f1": 0.68,
-      "exactMatch": 82.1,
-      "ruleRecall": 48.2,
-      "tokens": 1522,
-      "cost": 0.00216,
-      "durationMs": 2137,
+      "name": "C RAG+大模型（原版）",
+      "accuracy": 73.4,
+      "f1": 0.69,
+      "recall": 59.9,
+      "precision": 81.4,
+      "falsePositives": 29.0,
+      "falseNegatives": 85.0,
+      "exactMatch": 85.7,
+      "ruleRecall": 51.0,
+      "tokens": 1464,
+      "cost": 0.00205,
+      "durationMs": 1999,
       "errors": 0,
-      "fragmentValidity": 100.0
+      "fragmentValidity": 100.0,
+      "core": {
+        "n": 28,
+        "accuracy": 85.7,
+        "recall": 83.3
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 72.5,
+        "recall": 58.5,
+        "f1": 0.68
+      }
+    },
+    {
+      "name": "C1 RAG+紧凑检索",
+      "accuracy": 72.4,
+      "f1": 0.66,
+      "recall": 55.2,
+      "precision": 83.6,
+      "falsePositives": 23.0,
+      "falseNegatives": 95.0,
+      "exactMatch": 85.7,
+      "ruleRecall": 62.5,
+      "tokens": 1178,
+      "cost": 0.00175,
+      "durationMs": 1949,
+      "errors": 0,
+      "fragmentValidity": 100.0,
+      "core": {
+        "n": 28,
+        "accuracy": 92.9,
+        "recall": 83.3
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 71.0,
+        "recall": 53.5,
+        "f1": 0.65
+      }
+    },
+    {
+      "name": "E2 B+后置归因",
+      "accuracy": 66.8,
+      "f1": 0.55,
+      "recall": 40.6,
+      "precision": 84.3,
+      "falsePositives": 16.0,
+      "falseNegatives": 126.0,
+      "exactMatch": 92.9,
+      "ruleRecall": 47.9,
+      "tokens": 952,
+      "cost": 0.00146,
+      "durationMs": 2065,
+      "errors": 0,
+      "fragmentValidity": 100.0,
+      "core": {
+        "n": 28,
+        "accuracy": 96.4,
+        "recall": 91.7
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 64.8,
+        "recall": 37.5,
+        "f1": 0.52
+      }
     },
     {
       "name": "D 全量规则+大模型",
-      "accuracy": 78.8,
-      "f1": 0.73,
-      "exactMatch": 78.6,
-      "ruleRecall": 61.3,
-      "tokens": 2091,
-      "cost": 0.00269,
-      "durationMs": 1860,
+      "accuracy": 75.2,
+      "f1": 0.71,
+      "recall": 60.8,
+      "precision": 84.9,
+      "falsePositives": 23.0,
+      "falseNegatives": 83.0,
+      "exactMatch": 85.7,
+      "ruleRecall": 82.3,
+      "tokens": 2059,
+      "cost": 0.00264,
+      "durationMs": 1944,
       "errors": 0,
-      "fragmentValidity": 100.0
+      "fragmentValidity": 100.0,
+      "core": {
+        "n": 28,
+        "accuracy": 89.3,
+        "recall": 83.3
+      },
+      "public": {
+        "n": 400,
+        "accuracy": 74.2,
+        "recall": 59.5,
+        "f1": 0.7
+      }
     }
   ],
   "tiers": [
@@ -67,6 +184,8 @@
       "A": 75.0,
       "B": 100.0,
       "C": 100.0,
+      "C1": 100.0,
+      "E2": 100.0,
       "D": 100.0
     },
     {
@@ -74,6 +193,8 @@
       "A": 25.0,
       "B": 100.0,
       "C": 100.0,
+      "C1": 100.0,
+      "E2": 100.0,
       "D": 100.0
     },
     {
@@ -81,6 +202,8 @@
       "A": 33.3,
       "B": 66.7,
       "C": 33.3,
+      "C1": 66.7,
+      "E2": 66.7,
       "D": 66.7
     },
     {
@@ -88,20 +211,26 @@
       "A": 50.0,
       "B": 100.0,
       "C": 100.0,
+      "C1": 100.0,
+      "E2": 100.0,
       "D": 75.0
     },
     {
       "name": "多类/多违规混排",
       "A": 75.0,
       "B": 100.0,
-      "C": 25.0,
-      "D": 50.0
+      "C": 50.0,
+      "C1": 75.0,
+      "E2": 100.0,
+      "D": 75.0
     },
     {
       "name": "长文本（含千字级）",
       "A": 100.0,
       "B": 100.0,
       "C": 100.0,
+      "C1": 100.0,
+      "E2": 100.0,
       "D": 100.0
     },
     {
@@ -109,42 +238,43 @@
       "A": 83.3,
       "B": 100.0,
       "C": 100.0,
+      "C1": 100.0,
+      "E2": 100.0,
       "D": 100.0
     },
     {
-      "name": "公开数据集（ToxiCN）",
-      "A": 50.0,
-      "B": 62.5,
-      "C": 66.7,
-      "D": 70.8
+      "name": "公开数据集（ToxiCN + COLD）",
+      "A": 49.5,
+      "B": 65.0,
+      "C": 72.5,
+      "C1": 71.0,
+      "E2": 64.8,
+      "D": 74.2
     }
   ],
   "comparison": [
     {
       "scheme": "A 关键词规则",
       "strictV3": 54,
-      "relaxedV4": 57.7
+      "relaxedV4": 50.5
     },
     {
       "scheme": "B 纯大模型",
       "strictV3": 78,
-      "relaxedV4": 80.8
-    },
-    {
-      "scheme": "C RAG+大模型",
-      "strictV3": 85,
-      "relaxedV4": 75.0
+      "relaxedV4": 67.1
     },
     {
       "scheme": "D 全量规则+大模型",
       "strictV3": 83,
-      "relaxedV4": 78.8
+      "relaxedV4": 75.2
     }
   ],
   "conclusions": [
-    "本轮 v4 复测排序：B 81% > D 79% > C 75% > A 58%。排序受标签口径影响，二分类里「疑似 = 放行」，需要结合规则召回与可追溯性看。",
-    "规则召回：C 48% / D 61% / B 0%；保留 C（RAG）的理由是审核员终审需要可追溯的依据，而不是单一准确率。",
-    "D 的规则召回更高，但平均 token 比 C 多 37%（2091 vs 1522），四级精确匹配 79% vs 82%，只作消融对照。",
-    "C 的待修项：多类混排召回不全（top_k=6 装不下）；疑似/违规边界偏严。"
+    "本轮 428 条复测排序（准确率）：D 75.2% > C 73.4% > C1 72.4% > B 67.1% > E2 66.8% > A 50.5%。公开集占多数时 accuracy 会被短评论主导，必须同时看违规召回、核心集与公开集拆分。",
+    "总体违规召回：B 40.1%、C 59.9%、C1 55.2%、E2 40.6%、D 60.8%；误报数：B 14、C 29、C1 23、E2 16、D 23。",
+    "核心集（28 条）：B/E2 准确率 96.4% / 召回 91.7%；C 85.7% / 83.3%；C1 92.9% / 83.3%。B/E2 在业务硬样本上更强，D/C 在公开短评论上更强，不能只报总体准确率。",
+    "C1（紧凑检索）相比 C：token 1464 → 1178，规则召回 51.0% → 62.5%，违规召回 59.9% → 55.2%。C1 是成本/规则覆盖的折中，不是全面替代。",
+    "E2（B + 后置归因）：准确率 66.8%、违规召回 40.6%、规则召回 47.9%、误报 16。判定质量保住 B，但后置归因召回仍低于 C1/D，暂不替代 C。",
+    "D 的规则召回 82.3%，但平均 token 比 C 多 41%（2059 vs 1464），只作全量规则消融。"
   ]
 }

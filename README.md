@@ -21,7 +21,8 @@
    （通过/疑似/违规/严重）、RAG 规则检索、按平台规则预检、**人机协同终审**；
 2. **跨平台内容适配**：同一篇稿件按目标平台改写（小红书短笔记、公众号长文、抖音口播脚本等），
    **程序做格式自检**（字数/标签），**复用审核规则做平台合规预检**，结果可复制、按版本留痕；
-3. **可复现的实验**：52 条审核评测集（自建 + ToxiCN）、四方案对比（关键词/纯大模型/RAG/全量规则）、
+3. **可复现的实验**：428 条审核评测集（核心 28 + ToxiCN 200 + COLD 200）、六方案对比
+   （关键词/纯大模型/原版 RAG/C1 紧凑 RAG/E2 后置归因/全量规则）、
    适配质量评估（格式满足率 + LLM 评分 + 人工评分），系统内有评测中心。
 
 **明确不做**：不向真实平台发布（个人开发者拿不到各平台发布接口）、不做图片/视频审核、
@@ -218,8 +219,8 @@ python tools/verify_stage7.py
 python tools/verify_account_revision.py
 python tools/verify_stage6.py
 
-# 审核对比实验（52 条，4 方案；约 10 分钟）
-python tools/experiment_compare.py --rounds 1 --out docs/实验-对比实验-v4-放宽口径.md
+# 审核对比实验（428 条，6 方案；并发 6 约 15-30 分钟）
+python tools/experiment_compare.py --rounds 1 --workers 10 --out docs/实验-对比实验-v5-扩展集.md
 
 # 适配质量评估（4 篇 × 3 平台；约 2-3 分钟）
 python tools/eval_adaptation.py --run-id paper --out-dir docs/eval
@@ -267,6 +268,8 @@ python tools/experiment_speed.py
 | `docs/适配规则与提示词设计说明.md` | 平台约束、提示词、格式自检 |
 | `docs/decisions-*.md` | 关键决策与理由（多平台、技术栈、工作方式） |
 | `docs/实验-总览.md` | 审核/适配实验结论汇总 |
+| `docs/实验-对比实验-v5-扩展集.md` | 428 条扩展集、六方案原始结果 |
+| `docs/实验-扩展集-C1-E2分析.md` | C1 紧凑 RAG / E2 后置归因的取舍与核心/公开集拆分 |
 | `docs/实验-速度优化.md` | 适配策略（串行/并行/统一/通用）与思考强度的原始数据 |
 | `docs/性能分析报告.md` | 内存占用与耗时分配的实测报告 |
 | `docs/性能优化实验.md` | 内存四个方向的尝试、并行适配与思考强度的代价 |

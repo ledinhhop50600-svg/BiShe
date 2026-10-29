@@ -18,16 +18,22 @@ import argparse
 import json
 import math
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 JAVA = os.environ.get("ZIMEITI_BASE", "http://localhost:8080").rstrip("/")
 AGENT = os.environ.get("ZIMEITI_AGENT", "http://localhost:8001").rstrip("/")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLES_PATH = os.path.join(HERE, "eval_set", "samples.json")
+AGENT_DIR = os.path.abspath(os.path.join(HERE, "..", "agent"))
+if AGENT_DIR not in sys.path:
+    sys.path.insert(0, AGENT_DIR)
+from attribution import attach_citations  # noqa: E402
 
 PRICE_INPUT_PER_M = 1.0
 PRICE_OUTPUT_PER_M = 4.0
@@ -40,7 +46,7 @@ TIER_LABELS = {
     "multi": "多类/多违规混排",
     "long": "长文本（含千字级）",
     "clean": "正常内容",
-    "public": "公开数据集（ToxiCN）",
+    "public": "公开数据集（ToxiCN + COLD）",
 }
 
 
@@ -77,7 +83,8 @@ def run_keyword(sample, words):
             "trace": f"命中 {len(hits)} 个词"}
 
 
-def run_agent(sample, rules, platform, use_rag, localize=False, words=None):
+def run_agent(sample, rules, platform, use_rag, localize=False, words=None,
+              rag_profile=None, rag_top_k=None, rag_min_score=None, compact_rules=False):
     req = {
         "requestId": str(uuid.uuid4()), "articleId": 0, "triggerType": "POST_AUDIT",
         "targetPlatformKey": "local",
@@ -89,6 +96,14 @@ def run_agent(sample, rules, platform, use_rag, localize=False, words=None):
     }
     if localize:
         req["localize"] = True
+    if rag_profile:
+        req["ragProfile"] = rag_profile
+    if rag_top_k is not None:
+        req["ragTopK"] = rag_top_k
+    if rag_min_score is not None:
+        req["ragMinScore"] = rag_min_score
+    if compact_rules:
+        req["compactRules"] = True
     t0 = time.time()
     status, body = http_json(f"{AGENT}/api/agent/audit", "POST", req)
     elapsed = int((time.time() - t0) * 1000)
@@ -106,6 +121,23 @@ def run_agent(sample, rules, platform, use_rag, localize=False, words=None):
         "durationMs": body.get("durationMs", elapsed),
         "trace": trace_txt,
     }
+
+
+def run_e2(sample, rules, platform, words):
+    """E2：B 先判定，再用违规片段做后置规则归因，不把规则全文塞进 prompt。"""
+    base = run_agent(sample, [], platform, False, words=words)
+    if "error" in base:
+        return base
+    raw = {
+        "riskLevel": base.get("riskLevel"),
+        "violations": [{"fragment": f} for f in (base.get("fragments") or [])],
+        "_content": sample.get("content", ""),
+    }
+    cited = attach_citations(raw, rules)
+    base["hit_rules"] = [r["code"] for r in cited.get("hitRules") or []]
+    base["citations"] = cited.get("ruleCitations") or []
+    base["trace"] = (base.get("trace") or "") + f" / 后置归因 {len(base['hit_rules'])} 条"
+    return base
 
 
 def binary_metrics(rows):
@@ -140,7 +172,11 @@ def exact_rate(rows, samples_by_id):
 def rule_recall(rows, samples_by_id):
     ratios = []
     for r in rows:
-        expected = set(samples_by_id[r["id"]].get("expected_rules") or [])
+        sample = samples_by_id[r["id"]]
+        # 公开集只有二分类标签，没有“期望规则”；不要用它稀释规则召回。
+        if sample.get("binary_only"):
+            continue
+        expected = set(sample.get("expected_rules") or [])
         if not expected:
             continue
         ratios.append(len(expected & set(r.get("hit_rules") or [])) / len(expected))
@@ -184,10 +220,15 @@ def main():
     parser.add_argument("--out", default=os.path.join(HERE, "..", "docs", "实验-对比实验-v3.md"))
     parser.add_argument("--title", default="对比实验记录", help="报告标题")
     parser.add_argument("--localize", action="store_true")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="并发跑样本数（默认 1；评测集扩到几百条时用 4-6 明显加速）")
+    parser.add_argument("--json-out", default=os.path.join(HERE, "..", "docs", "eval", "audit-results.json"),
+                        help="结构化结果输出路径（试跑时用临时文件，避免覆盖正式结果）")
     parser.add_argument("--min-len", type=int, default=0,
                         help="只跑正文长度 >= 该值的样本（定位实验只关心长文）")
     args = parser.parse_args()
     rounds = max(1, args.rounds)
+    args.workers = max(1, args.workers)
 
     with open(SAMPLES_PATH, encoding="utf-8") as f:
         data = json.load(f)
@@ -226,24 +267,36 @@ def main():
     schemes = [
         ("A 关键词规则", lambda s: run_keyword(s, words)),
         ("B 纯大模型", lambda s: run_agent(s, [], platform, False, words=words)),
-        ("C RAG+大模型", lambda s: run_agent(s, rules, platform, True, words=words)),
+        ("C RAG+大模型（原版）", lambda s: run_agent(s, rules, platform, True, words=words)),
+        ("C1 RAG+紧凑检索", lambda s: run_agent(
+            s, rules, platform, True, words=words,
+            rag_profile="compact", rag_top_k=4, rag_min_score=0.55, compact_rules=True)),
+        ("E2 B+后置归因", lambda s: run_e2(s, rules, platform, words)),
         ("D 全量规则+大模型", lambda s: run_agent(s, rules, platform, False, words=words)),
     ]
     if args.localize:
-        schemes.append(("E RAG+关键词定位",
+        schemes.append(("L RAG+关键词定位",
                         lambda s: run_agent(s, rules, platform, True, localize=True, words=words)))
 
     print(f"评测集 {len(samples)} 条 | 规则 {len(rules)} | 敏感词 {len(words)} | "
-          f"轮数 {rounds} | 方案 {len(schemes)} | Agent={AGENT}")
+          f"轮数 {rounds} | 方案 {len(schemes)} | 并发 {args.workers} | Agent={AGENT}")
 
     all_rounds = {name: [] for name, _ in schemes}
     for rnd in range(1, rounds + 1):
         print(f"\n########## 第 {rnd}/{rounds} 轮 ##########")
         for name, fn in schemes:
             print(f"--- {name} ---")
+            def one(sample):
+                return sample, fn(sample)
+
+            if args.workers > 1:
+                with ThreadPoolExecutor(max_workers=args.workers) as ex:
+                    pairs = list(ex.map(one, samples))
+            else:
+                pairs = [one(s) for s in samples]
+
             rows = []
-            for s in samples:
-                r = fn(s)
+            for s, r in pairs:
                 rows.append({"id": s["id"], "tier": s["tier"],
                              "expected_level": s["expected_level"],
                              "pred_level": r.get("riskLevel"), "fragments": r.get("fragments") or [],
@@ -260,21 +313,23 @@ def main():
     L = []
     L.append(f"# {args.title}\n")
     L.append(f"- 实验时间：{time.strftime('%Y-%m-%d %H:%M')}")
-    L.append(f"- 评测集：{len(samples)} 条（自建 {data['stats']['self_built']} + 公开 {data['stats']['public']}）")
-    L.append(f"- Agent：{AGENT} | 规则 {len(rules)} 条 | 敏感词 {len(words)} 个 | 轮数 {rounds}")
-    L.append("- 模型 deepseek-flash（思考模式关闭）| 检索 bge-m3 top_k=6（元规则固定带上）")
+    L.append(f"- 评测集：{len(samples)} 条（自建 {data['stats']['self_built']} + ToxiCN {data['stats'].get('toxicn', 0)} + COLD {data['stats'].get('cold', 0)}）")
+    L.append(f"- Agent：{AGENT} | 规则 {len(rules)} 条 | 敏感词 {len(words)} 个 | 轮数 {rounds} | 并发 {args.workers}")
+    L.append("- 模型 deepseek-flash（思考模式关闭）| 检索 bge-m3；C 用原版 top_k=6，C1 用紧凑检索 top_k=4/阈值 0.55")
     L.append(f"- 计价：输入 {PRICE_INPUT_PER_M} 元/百万、输出 {PRICE_OUTPUT_PER_M} 元/百万（空闲时段）")
     L.append("- 二分类口径：`riskLevel >= 2` 视为阻断；调用失败按未阻断计入（保守口径）\n")
 
     L.append(f"## 一、总体结果（{rounds} 轮均值 ± 标准差）\n")
-    L.append("| 方案 | 准确率 | F1 | 平均 token | 成本/条 | 平均耗时 | 错误数 |")
-    L.append("|---|---|---|---|---|---|---|")
+    L.append("| 方案 | 准确率 | 违规召回 | 误报 | F1 | 平均 token | 成本/条 | 平均耗时 | 错误数 |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
     for name, _ in schemes:
-        accs, f1s, toks, costs, durs, errs = [], [], [], [], [], []
+        accs, f1s, toks, costs, durs, errs, recalls, fps = [], [], [], [], [], [], [], []
         for rows in all_rounds[name]:
             m = binary_metrics(rows)
             accs.append(m["accuracy"])
             f1s.append(m["f1"])
+            recalls.append(m["recall"])
+            fps.append(m["fp"])
             toks.append(sum(r["promptTokens"] + r["completionTokens"] for r in rows) / len(rows))
             costs.append(sum(r["promptTokens"] * PRICE_INPUT_PER_M + r["completionTokens"] * PRICE_OUTPUT_PER_M
                              for r in rows) / len(rows) / 1_000_000)
@@ -283,14 +338,16 @@ def main():
             errs.append(sum(1 for r in rows if r["error"]))
         am, asd = mean_std(accs)
         fm, fsd = mean_std(f1s)
+        rm, _ = mean_std(recalls)
+        fpm, _ = mean_std(fps)
         tm, _ = mean_std(toks)
         cm, _ = mean_std(costs)
         dm, _ = mean_std(durs)
         if rounds > 1:
-            L.append(f"| {name} | {am:.0%} ± {asd:.1%} | {fm:.2f} ± {fsd:.2f} | {tm:.0f} | "
+            L.append(f"| {name} | {am:.0%} ± {asd:.1%} | {rm:.1%} | {fpm:.1f} | {fm:.2f} ± {fsd:.2f} | {tm:.0f} | "
                      f"{cm:.5f} 元 | {dm:.0f}ms | {max(errs)} |")
         else:
-            L.append(f"| {name} | {am:.0%} | {fm:.2f} | {tm:.0f} | {cm:.5f} 元 | {dm:.0f}ms | {max(errs)} |")
+            L.append(f"| {name} | {am:.0%} | {rm:.1%} | {fpm:.1f} | {fm:.2f} | {tm:.0f} | {cm:.5f} 元 | {dm:.0f}ms | {max(errs)} |")
 
     L.append("\n## 二、分层准确率（各轮均值）\n")
     L.append("| 层级 | " + " | ".join(n.split(" ")[0] for n, _ in schemes) + " |")
@@ -360,7 +417,7 @@ def main():
     print(f"\n✅ 报告：{os.path.abspath(args.out)}")
 
     # ---------- 结构化结果（评测中心页面读取） ----------
-    audit_path = os.path.join(HERE, "..", "docs", "eval", "audit-results.json")
+    audit_path = os.path.abspath(args.json_out)
     old = {}
     try:
         with open(audit_path, encoding="utf-8") as f:
@@ -371,14 +428,29 @@ def main():
     scheme_rows = []
     for name, _ in schemes:
         accs, f1s, exacts, recalls, toks, costs, durs, errs, frags = [], [], [], [], [], [], [], [], []
+        recalls_bin, precisions, fps, fns = [], [], [], []
+        core_accs, core_recalls, pub_accs, pub_recalls, pub_f1s = [], [], [], [], []
         for rows in all_rounds[name]:
             m = binary_metrics(rows)
             accs.append(m["accuracy"] * 100)
             f1s.append(m["f1"])
+            recalls_bin.append(m["recall"] * 100)
+            precisions.append(m["precision"] * 100)
+            fps.append(m["fp"])
+            fns.append(m["fn"])
             exact = exact_rate(rows, samples_by_id)
             exacts.append(exact * 100 if exact is not None else 0)
             recall = rule_recall(rows, samples_by_id)
             recalls.append(recall * 100 if recall is not None else 0)
+            core_rows = [r for r in rows if not samples_by_id[r["id"]].get("binary_only")]
+            pub_rows = [r for r in rows if samples_by_id[r["id"]].get("binary_only")]
+            mc = binary_metrics(core_rows)
+            mp = binary_metrics(pub_rows)
+            core_accs.append(mc["accuracy"] * 100)
+            core_recalls.append(mc["recall"] * 100)
+            pub_accs.append(mp["accuracy"] * 100)
+            pub_recalls.append(mp["recall"] * 100)
+            pub_f1s.append(mp["f1"])
             toks.append(sum(r["promptTokens"] + r["completionTokens"] for r in rows) / len(rows))
             costs.append(sum(r["promptTokens"] * PRICE_INPUT_PER_M + r["completionTokens"] * PRICE_OUTPUT_PER_M
                              for r in rows) / len(rows) / 1_000_000)
@@ -389,16 +461,31 @@ def main():
             frags.append(valid / total * 100 if total else 100)
         am, _ = mean_std(accs)
         fm, _ = mean_std(f1s)
-        em, _ = mean_std(exacts)
         rm, _ = mean_std(recalls)
+        rbm, _ = mean_std(recalls_bin)
+        prm, _ = mean_std(precisions)
+        fpm, _ = mean_std(fps)
+        fnm, _ = mean_std(fns)
+        em, _ = mean_std(exacts)
         tm, _ = mean_std(toks)
         cm, _ = mean_std(costs)
         dm, _ = mean_std(durs)
         vm, _ = mean_std(frags)
+        cam, _ = mean_std(core_accs)
+        crm, _ = mean_std(core_recalls)
+        pam, _ = mean_std(pub_accs)
+        prm2, _ = mean_std(pub_recalls)
+        pfm, _ = mean_std(pub_f1s)
+        n_core = sum(1 for s in samples if not s.get("binary_only"))
+        n_public = sum(1 for s in samples if s.get("binary_only"))
         scheme_rows.append({
             "name": name,
             "accuracy": round(am, 1),
             "f1": round(fm, 2),
+            "recall": round(rbm, 1),
+            "precision": round(prm, 1),
+            "falsePositives": round(fpm, 1),
+            "falseNegatives": round(fnm, 1),
             "exactMatch": round(em, 1),
             "ruleRecall": round(rm, 1),
             "tokens": round(tm),
@@ -406,6 +493,8 @@ def main():
             "durationMs": round(dm),
             "errors": max(errs),
             "fragmentValidity": round(vm, 1),
+            "core": {"n": n_core, "accuracy": round(cam, 1), "recall": round(crm, 1)},
+            "public": {"n": n_public, "accuracy": round(pam, 1), "recall": round(prm2, 1), "f1": round(pfm, 2)},
         })
 
     tier_rows = []
@@ -427,34 +516,50 @@ def main():
     lead = sorted(scheme_rows, key=lambda s: s["accuracy"], reverse=True)
     b = by_letter.get("B", {})
     c = by_letter.get("C", {})
+    c1 = by_letter.get("C1", {})
+    e2 = by_letter.get("E2", {})
     d = by_letter.get("D", {})
     token_ratio = (d.get("tokens", 0) / c["tokens"] - 1) * 100 if c.get("tokens") else 0
     conclusions = [
-        "本轮 v4 复测排序：" + " > ".join(
-            f"{s['name'].split(' ')[0]} {s['accuracy']:.0f}%" for s in lead) + "。"
-        "排序受标签口径影响，二分类里「疑似 = 放行」，需要结合规则召回与可追溯性看。",
-        f"规则召回：C {c.get('ruleRecall', 0):.0f}% / D {d.get('ruleRecall', 0):.0f}% / "
-        f"B {b.get('ruleRecall', 0):.0f}%；保留 C（RAG）的理由是审核员终审需要可追溯的依据，"
-        "而不是单一准确率。",
-        f"D 的规则召回更高，但平均 token 比 C 多 {token_ratio:.0f}%"
-        f"（{d.get('tokens', 0)} vs {c.get('tokens', 0)}），四级精确匹配 "
-        f"{d.get('exactMatch', 0):.0f}% vs {c.get('exactMatch', 0):.0f}%，只作消融对照。",
-        "C 的待修项：多类混排召回不全（top_k=6 装不下）；疑似/违规边界偏严。",
+        f"本轮 {len(samples)} 条复测排序（准确率）：" + " > ".join(
+            f"{s['name'].split(' ')[0]} {s['accuracy']:.1f}%" for s in lead) + "。"
+        "公开集占多数时 accuracy 会被短评论主导，必须同时看违规召回、核心集与公开集拆分。",
+        f"总体违规召回：B {b.get('recall', 0):.1f}%、C {c.get('recall', 0):.1f}%、"
+        f"C1 {c1.get('recall', 0):.1f}%、E2 {e2.get('recall', 0):.1f}%、D {d.get('recall', 0):.1f}%；"
+        f"误报数：B {b.get('falsePositives', 0):.0f}、C {c.get('falsePositives', 0):.0f}、"
+        f"C1 {c1.get('falsePositives', 0):.0f}、E2 {e2.get('falsePositives', 0):.0f}、D {d.get('falsePositives', 0):.0f}。",
+        f"核心集（{b.get('core', {}).get('n', 0)} 条）：B/E2 准确率 "
+        f"{b.get('core', {}).get('accuracy', 0):.1f}% / 召回 {b.get('core', {}).get('recall', 0):.1f}%；"
+        f"C {c.get('core', {}).get('accuracy', 0):.1f}% / {c.get('core', {}).get('recall', 0):.1f}%；"
+        f"C1 {c1.get('core', {}).get('accuracy', 0):.1f}% / {c1.get('core', {}).get('recall', 0):.1f}%；"
+        "B/E2 在业务硬样本上更强，D/C 在公开短评论上更强——不能只报总体准确率。",
+        f"C1（紧凑检索）相比 C：token {c.get('tokens', 0)} → {c1.get('tokens', 0)}，"
+        f"规则召回 {c.get('ruleRecall', 0):.1f}% → {c1.get('ruleRecall', 0):.1f}%，"
+        f"违规召回 {c.get('recall', 0):.1f}% → {c1.get('recall', 0):.1f}%。"
+        "C1 是成本/规则覆盖的折中，不是全面替代。",
+        f"E2（B + 后置归因）：准确率 {e2.get('accuracy', 0):.1f}%、违规召回 {e2.get('recall', 0):.1f}%、"
+        f"规则召回 {e2.get('ruleRecall', 0):.1f}%、误报 {e2.get('falsePositives', 0):.0f}。"
+        "判定质量保住 B，但后置归因召回仍低于 C1/D，暂不替代 C。",
+        f"D 的规则召回 {d.get('ruleRecall', 0):.1f}%，但平均 token 比 C 多 {token_ratio:.0f}%"
+        f"（{d.get('tokens', 0)} vs {c.get('tokens', 0)}），只作全量规则消融。",
     ]
 
     audit_json = {
         "generatedAt": time.strftime("%Y-%m-%d %H:%M"),
         "dataset": {
             "total": len(samples),
-            "selfBuilt": data.get("stats", {}).get("self_built", 0),
-            "public": data.get("stats", {}).get("public", 0),
+            "selfBuilt": sum(1 for s in samples if not s.get("binary_only")),
+            "public": sum(1 for s in samples if s.get("binary_only")),
+            "toxicn": sum(1 for s in samples if "ToxiCN" in (s.get("source") or "")),
+            "cold": sum(1 for s in samples if "COLD" in (s.get("source") or "")),
+            "core": sum(1 for s in samples if not s.get("binary_only")),
             "labelPolicy": (old.get("dataset") or {}).get("labelPolicy") or "放宽口径（v4）",
-            "publicSource": (old.get("dataset") or {}).get("publicSource") or "ToxiCN (ACL 2023)",
+            "publicSource": "ToxiCN (ACL 2023) + COLD (EMNLP 2022)",
         },
         "model": "deepseek-flash",
         "thinking": "关闭（reasoning_effort=none）",
         "rounds": rounds,
-        "note": "v4 复测（本轮）；结构化结果由 tools/experiment_compare.py 生成",
+        "note": "扩展评测集复测；结构化结果由 tools/experiment_compare.py 生成",
         "schemes": scheme_rows,
         "tiers": tier_rows,
         "comparison": comparison_rows,

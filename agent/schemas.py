@@ -57,6 +57,13 @@ class AuditRequest(BaseModel):
     # 「RAG」与「全量规则」两组，而不必反复改配置重启服务。
     useRag: bool | None = None
 
+    # 仅供对比实验使用：规则检索策略。
+    # legacy = 原行为（关键词命中全部优先，top_k 直接截断）；compact = C1（关键词限流+阈值+去重+紧凑规则卡片）。
+    ragProfile: Literal["legacy", "compact"] = "legacy"
+    ragTopK: int | None = None
+    ragMinScore: float | None = None
+    compactRules: bool = False
+
     # 仅供对比实验使用：开启「关键词定位」——先把长文聚焦到命中了规则示例词的段落，再送模型。
     # 一段都没命中时会自动回退全文（否则会退化成为关键词漏判）。
     localize: bool | None = None
