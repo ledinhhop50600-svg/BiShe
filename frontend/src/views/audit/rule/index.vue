@@ -213,7 +213,7 @@ async function onDelete(row) {
         </el-table-column>
         <el-table-column prop="ruleContent" label="规则内容" min-width="280" show-overflow-tooltip />
         <el-table-column prop="source" label="依据来源" min-width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="130">
           <template #default="{ row }">
             <el-button v-perm="'audit:rule'" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-perm="'audit:rule'" link type="danger" @click="onDelete(row)">删除</el-button>

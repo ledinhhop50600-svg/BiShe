@@ -115,7 +115,7 @@ async function remove(row) {
             <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button v-perm="'platform:manage'" link type="primary" @click="openForm(row)">编辑</el-button>
             <el-button v-perm="'platform:manage'" link type="danger" @click="remove(row)">删除</el-button>

@@ -186,6 +186,16 @@ h4 {
 .el-table--border .el-table__cell {
   border-right-color: #f0e9df;
 }
+.el-table .cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.el-table .el-table__cell {
+  overflow: hidden;
+}
+.el-table__body-wrapper {
+  overflow-x: auto;
+}
 
 /* ---------------- 表单 ---------------- */
 .el-input__wrapper,

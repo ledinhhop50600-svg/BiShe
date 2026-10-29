@@ -124,7 +124,7 @@ async function runTest() {
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button v-perm="'audit:sensitive'" link type="primary" @click="openForm(row)">编辑</el-button>
             <el-button v-perm="'audit:sensitive'" link type="danger" @click="remove(row)">删除</el-button>

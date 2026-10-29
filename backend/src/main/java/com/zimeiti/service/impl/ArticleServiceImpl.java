@@ -194,10 +194,9 @@ public class ArticleServiceImpl implements ArticleService {
         boolean admin = StpUtil.hasPermission("article:delete");
         if (!admin) {
             assertIsAuthor(article);
-            if (article.getStatus() != STATUS_DRAFT) {
-                throw new BizException("只能删除草稿状态的稿件");
-            }
         }
+        // 作者可以删除自己的稿件（包括已发布/已下架）：逻辑删除后不再展示；
+        // 审核记录与适配历史保留，便于追溯。管理员可删除任意稿件。
         articleMapper.deleteById(id);
         articleTagMapper.delete(Wrappers.<BizArticleTag>lambdaQuery().eq(BizArticleTag::getArticleId, id));
     }

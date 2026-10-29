@@ -76,7 +76,7 @@ async function onWithdraw(row) {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确定删除草稿《${row.title}》吗？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(row.status === 2 ? `《${row.title}》已发布，删除后会立即从内容广场消失（逻辑删除，审核记录保留）。` : `确定删除《${row.title}》吗？删除后不再展示。`, '删除稿件', { type: 'warning', confirmButtonText: '删除' })
   await deleteArticle(row.id)
   ElMessage.success('已删除')
   await load()
@@ -143,7 +143,7 @@ async function openFeedback(row) {
             <el-button v-if="row.status === 3 || row.status === 4" link type="danger" @click="openFeedback(row)">查看反馈</el-button>
             <el-button v-if="row.status === 2 || row.status === 5" link type="primary" @click="openResubmit(row)">编辑并重审</el-button>
             <el-button link type="primary" @click="openAdapt(row)">跨平台适配</el-button>
-            <el-button v-if="row.status === 0" link type="danger" @click="onDelete(row)">删除</el-button>
+            <el-button link type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

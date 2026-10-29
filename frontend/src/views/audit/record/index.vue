@@ -126,7 +126,7 @@ function fmtTime(t) {
           </template>
         </el-table-column>
         <el-table-column prop="reviewRemark" label="处理意见" min-width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="80">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">查看</el-button>
           </template>

@@ -201,7 +201,7 @@ async function onDelete(row) {
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="操作" width="230">
           <template #default="{ row }">
             <el-button v-perm="'system:user'" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-perm="'system:user'" link type="warning" @click="onResetPassword(row)">重置密码</el-button>
