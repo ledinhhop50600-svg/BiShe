@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-10-29",
+  "note": "内存优化前后对照（RSS，单位 MB）；数据来自 docs/性能优化实验.md 的实测，演示模式为 jar + preview。",
+  "memory": [
+    { "name": "前端（dev → preview）", "before": 222.4, "after": 98.1, "unit": "MB" },
+    { "name": "后端应用 JVM", "before": 209.2, "after": 172.9, "unit": "MB" },
+    { "name": "后端启动（Maven → jar）", "before": 429.5, "after": 204.3, "unit": "MB" }
+  ],
+  "mysql": {
+    "total": 664.4,
+    "items": [
+      { "name": "performance_schema", "value": 230.9 },
+      { "name": "Buffer Pool", "value": 130.8 },
+      { "name": "连接 / 线程 / 其他", "value": 302.7 }
+    ]
+  },
+  "agent": { "rss": 75.1, "private": 61.1, "note": "不加载本地模型，已接近下限" },
+  "totals": {
+    "appRss": 514.6,
+    "devRss": 771.1,
+    "demoRss": 421.7,
+    "mysqlPrivate": 664.4
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19 14:24",
+  "generatedAt": "2026-10-29 13:09",
   "dataset": {
     "total": 52,
     "selfBuilt": 28,
@@ -10,33 +10,141 @@
   "model": "deepseek-flash",
   "thinking": "关闭（reasoning_effort=none）",
   "rounds": 1,
-  "note": "v4 复测；v3 严格口径下 A54/B78/C85/D83。放宽口径后排序变化，但规则引用与可审计性不变。",
+  "note": "v4 复测（本轮）；结构化结果由 tools/experiment_compare.py 生成",
   "schemes": [
-    {"name": "A 关键词规则", "accuracy": 58, "f1": 0.39, "tokens": 0, "cost": 0.0, "durationMs": 0, "errors": 0, "exactMatch": 54, "ruleRecall": 0, "fragmentValidity": 100},
-    {"name": "B 纯大模型", "accuracy": 83, "f1": 0.77, "tokens": 980, "cost": 0.00149, "durationMs": 1550, "errors": 0, "exactMatch": 93, "ruleRecall": 0, "fragmentValidity": 100},
-    {"name": "C RAG+大模型", "accuracy": 81, "f1": 0.76, "tokens": 1514, "cost": 0.00213, "durationMs": 1871, "errors": 0, "exactMatch": 89, "ruleRecall": 47, "fragmentValidity": 100},
-    {"name": "D 全量规则+大模型", "accuracy": 81, "f1": 0.75, "tokens": 2084, "cost": 0.00266, "durationMs": 1616, "errors": 0, "exactMatch": 86, "ruleRecall": 60, "fragmentValidity": 100}
+    {
+      "name": "A 关键词规则",
+      "accuracy": 57.7,
+      "f1": 0.39,
+      "exactMatch": 53.6,
+      "ruleRecall": 0.0,
+      "tokens": 0,
+      "cost": 0.0,
+      "durationMs": 0,
+      "errors": 0,
+      "fragmentValidity": 100.0
+    },
+    {
+      "name": "B 纯大模型",
+      "accuracy": 80.8,
+      "f1": 0.74,
+      "exactMatch": 92.9,
+      "ruleRecall": 0.0,
+      "tokens": 997,
+      "cost": 0.00156,
+      "durationMs": 1887,
+      "errors": 0,
+      "fragmentValidity": 100.0
+    },
+    {
+      "name": "C RAG+大模型",
+      "accuracy": 75.0,
+      "f1": 0.68,
+      "exactMatch": 82.1,
+      "ruleRecall": 48.2,
+      "tokens": 1522,
+      "cost": 0.00216,
+      "durationMs": 2137,
+      "errors": 0,
+      "fragmentValidity": 100.0
+    },
+    {
+      "name": "D 全量规则+大模型",
+      "accuracy": 78.8,
+      "f1": 0.73,
+      "exactMatch": 78.6,
+      "ruleRecall": 61.3,
+      "tokens": 2091,
+      "cost": 0.00269,
+      "durationMs": 1860,
+      "errors": 0,
+      "fragmentValidity": 100.0
+    }
   ],
   "tiers": [
-    {"name": "易：明确的商业违规", "A": 75, "B": 100, "C": 100, "D": 100},
-    {"name": "陷阱：含违禁词但语境合法", "A": 25, "B": 100, "C": 100, "D": 100},
-    {"name": "盲区：无关键词但实际违规", "A": 33, "B": 67, "C": 33, "D": 67},
-    {"name": "分级边界：个人分享 vs 商业推广", "A": 50, "B": 100, "C": 100, "D": 75},
-    {"name": "多类/多违规混排", "A": 75, "B": 100, "C": 75, "D": 75},
-    {"name": "长文本（含千字级）", "A": 100, "B": 100, "C": 100, "D": 100},
-    {"name": "正常内容", "A": 83, "B": 100, "C": 100, "D": 100},
-    {"name": "公开数据集（ToxiCN）", "A": 50, "B": 67, "C": 71, "D": 71}
+    {
+      "name": "易：明确的商业违规",
+      "A": 75.0,
+      "B": 100.0,
+      "C": 100.0,
+      "D": 100.0
+    },
+    {
+      "name": "陷阱：含违禁词但语境合法",
+      "A": 25.0,
+      "B": 100.0,
+      "C": 100.0,
+      "D": 100.0
+    },
+    {
+      "name": "盲区：无关键词但实际违规",
+      "A": 33.3,
+      "B": 66.7,
+      "C": 33.3,
+      "D": 66.7
+    },
+    {
+      "name": "分级边界：个人分享 vs 商业推广",
+      "A": 50.0,
+      "B": 100.0,
+      "C": 100.0,
+      "D": 75.0
+    },
+    {
+      "name": "多类/多违规混排",
+      "A": 75.0,
+      "B": 100.0,
+      "C": 25.0,
+      "D": 50.0
+    },
+    {
+      "name": "长文本（含千字级）",
+      "A": 100.0,
+      "B": 100.0,
+      "C": 100.0,
+      "D": 100.0
+    },
+    {
+      "name": "正常内容",
+      "A": 83.3,
+      "B": 100.0,
+      "C": 100.0,
+      "D": 100.0
+    },
+    {
+      "name": "公开数据集（ToxiCN）",
+      "A": 50.0,
+      "B": 62.5,
+      "C": 66.7,
+      "D": 70.8
+    }
   ],
   "comparison": [
-    {"scheme": "A 关键词规则", "strictV3": 54, "relaxedV4": 58},
-    {"scheme": "B 纯大模型", "strictV3": 78, "relaxedV4": 83},
-    {"scheme": "C RAG+大模型", "strictV3": 85, "relaxedV4": 81},
-    {"scheme": "D 全量规则+大模型", "strictV3": 83, "relaxedV4": 81}
+    {
+      "scheme": "A 关键词规则",
+      "strictV3": 54,
+      "relaxedV4": 57.7
+    },
+    {
+      "scheme": "B 纯大模型",
+      "strictV3": 78,
+      "relaxedV4": 80.8
+    },
+    {
+      "scheme": "C RAG+大模型",
+      "strictV3": 85,
+      "relaxedV4": 75.0
+    },
+    {
+      "scheme": "D 全量规则+大模型",
+      "strictV3": 83,
+      "relaxedV4": 78.8
+    }
   ],
   "conclusions": [
-    "排序翻转是标签口径造成的：二分类里「疑似 = 放行」，B 本来就少拦边界内容，因此放宽后上升；C/D 把边界判成违规，变成过度阻断。",
-    "保留 C（RAG）的真正理由不是单一准确率：规则引用召回 C47% / D60% / B0%，审核员终审需要可追溯的依据；规则可改、行为可调；人工兜底下偏保守是安全方向。",
-    "D 的规则召回更高但 token 多 38%、四级精确匹配更低，只作消融对照。",
+    "本轮 v4 复测排序：B 81% > D 79% > C 75% > A 58%。排序受标签口径影响，二分类里「疑似 = 放行」，需要结合规则召回与可追溯性看。",
+    "规则召回：C 48% / D 61% / B 0%；保留 C（RAG）的理由是审核员终审需要可追溯的依据，而不是单一准确率。",
+    "D 的规则召回更高，但平均 token 比 C 多 37%（2091 vs 1522），四级精确匹配 79% vs 82%，只作消融对照。",
     "C 的待修项：多类混排召回不全（top_k=6 装不下）；疑似/违规边界偏严。"
   ]
 }

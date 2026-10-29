@@ -50,7 +50,14 @@ const routes = [
         path: 'architecture',
         name: 'Architecture',
         component: () => import('@/views/architecture/index.vue'),
-        meta: { title: '系统架构' },
+        meta: { title: '架构设计' },
+      },
+      {
+        // 需求与功能设计：静态说明页，所有登录用户可看
+        path: 'design/requirements',
+        name: 'RequirementsDesign',
+        component: () => import('@/views/design/requirements.vue'),
+        meta: { title: '需求设计' },
       },
 
       // ---------- 系统管理（本阶段实现） ----------

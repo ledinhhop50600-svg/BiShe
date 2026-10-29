@@ -57,6 +57,9 @@ public class EvalController {
         out.put("audit", readJson("docs/eval/audit-results.json"));
         out.put("adaptation", readJson("docs/eval/adaptation-results.json"));
         out.put("demo", readJson("docs/eval/demo/adaptation-results.json"));
+        out.put("performance", readJson("docs/perf/perf-latest.json"));
+        out.put("speed", readJson("docs/perf/speed-experiment.json"));
+        out.put("optimization", readJson("docs/perf/optimization-summary.json"));
         return Result.ok(out);
     }
 

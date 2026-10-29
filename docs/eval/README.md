@@ -7,7 +7,7 @@
 
 | 文件 | 来源 | 说明 |
 |---|---|---|
-| `audit-results.json` | 由 v4 对比实验整理 | 审核实验主表（52 条、4 方案、分层、口径对照、结论） |
+| `audit-results.json` | `tools/experiment_compare.py --rounds 1`（2026-10-29 复测） | 审核实验主表（52 条、4 方案、分层、口径对照、结论） |
 | `adaptation-results.json` | `tools/eval_adaptation.py --run-id paper-20261019-v2` | 适配评估论文数据（4 篇 × 3 平台） |
 | `adaptation-review.html` | `tools/make_human_review.py` | **人工评分页面（推荐）**：原文 vs 适配结果 + 1-5 分评分 + 导出 CSV |
 | `adaptation-human-review.md` | 同上 | 纯文字版（不想开浏览器时看） |

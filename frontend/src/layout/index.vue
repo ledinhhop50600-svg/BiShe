@@ -8,7 +8,7 @@ import SidebarItem from './SidebarItem.vue'
 /**
  * 后台主框架：左侧动态菜单 + 顶部栏 + 内容区。
  * <p>菜单来自后端下发的菜单树，不同角色看到的导航不同；侧边栏底部的
- * 「系统架构」是技术说明页，不属于业务菜单，所以固定放在这里。
+ * 「设计文档」是需求/架构说明页，不属于业务菜单，所以固定放在这里。
  */
 const route = useRoute()
 const router = useRouter()
@@ -66,9 +66,24 @@ async function onLogout() {
         <SidebarItem v-for="menu in menus" :key="menu.id" :item="menu" />
       </el-menu>
 
-      <div class="aside-footer" @click="router.push('/architecture')">
-        <el-icon><Grid /></el-icon>
-        <span v-if="!isCollapse">系统架构</span>
+      <div class="aside-design">
+        <div v-if="!isCollapse" class="design-label">设计文档</div>
+        <el-menu
+          :default-active="activeMenu"
+          :collapse="isCollapse"
+          :collapse-transition="false"
+          router
+          class="design-menu"
+        >
+          <el-menu-item index="/design/requirements">
+            <el-icon><Document /></el-icon>
+            <template #title>需求设计</template>
+          </el-menu-item>
+          <el-menu-item index="/architecture">
+            <el-icon><Grid /></el-icon>
+            <template #title>架构设计</template>
+          </el-menu-item>
+        </el-menu>
       </div>
     </el-aside>
 
@@ -93,7 +108,8 @@ async function onLogout() {
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="router.push('/architecture')">系统架构</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/design/requirements')">需求设计</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/architecture')">架构设计</el-dropdown-item>
                 <el-dropdown-item @click="router.push('/profile')">个人中心</el-dropdown-item>
                 <el-dropdown-item divided @click="onLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -221,26 +237,47 @@ async function onLogout() {
   margin: 3px 8px;
 }
 
-.aside-footer {
+.aside-design {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
+  padding: 8px 0 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  color: #8fa39c;
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 0.16s ease;
 }
 
-.is-collapse .aside-footer {
-  justify-content: center;
-  padding: 14px 0;
+.design-label {
+  padding: 4px 20px 5px;
+  color: #7f938c;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
 }
 
-.aside-footer:hover {
+.design-menu {
+  border-right: none;
+  background: transparent;
+}
+
+.design-menu :deep(.el-menu-item) {
+  height: 36px;
+  line-height: 36px;
+  margin: 2px 12px;
+  border-radius: 9px;
+  color: #aebdb7;
+  font-size: 12.5px;
+  transition: all 0.16s ease;
+}
+
+.design-menu :deep(.el-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.055);
   color: #f4e8d6;
+}
+
+.design-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(176, 138, 90, 0.2), rgba(176, 138, 90, 0.04));
+  color: #f8ecda;
+  box-shadow: inset 3px 0 0 #b08a5a;
+}
+
+.is-collapse .design-menu :deep(.el-menu-item) {
+  margin: 2px 8px;
 }
 
 .header {

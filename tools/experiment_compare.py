@@ -359,6 +359,111 @@ def main():
         f.write("\n".join(L) + "\n")
     print(f"\n✅ 报告：{os.path.abspath(args.out)}")
 
+    # ---------- 结构化结果（评测中心页面读取） ----------
+    audit_path = os.path.join(HERE, "..", "docs", "eval", "audit-results.json")
+    old = {}
+    try:
+        with open(audit_path, encoding="utf-8") as f:
+            old = json.load(f)
+    except Exception:
+        pass
+
+    scheme_rows = []
+    for name, _ in schemes:
+        accs, f1s, exacts, recalls, toks, costs, durs, errs, frags = [], [], [], [], [], [], [], [], []
+        for rows in all_rounds[name]:
+            m = binary_metrics(rows)
+            accs.append(m["accuracy"] * 100)
+            f1s.append(m["f1"])
+            exact = exact_rate(rows, samples_by_id)
+            exacts.append(exact * 100 if exact is not None else 0)
+            recall = rule_recall(rows, samples_by_id)
+            recalls.append(recall * 100 if recall is not None else 0)
+            toks.append(sum(r["promptTokens"] + r["completionTokens"] for r in rows) / len(rows))
+            costs.append(sum(r["promptTokens"] * PRICE_INPUT_PER_M + r["completionTokens"] * PRICE_OUTPUT_PER_M
+                             for r in rows) / len(rows) / 1_000_000)
+            durs.append(sum(r["durationMs"] for r in rows if not r["error"]) /
+                        max(1, sum(1 for r in rows if not r["error"])))
+            errs.append(sum(1 for r in rows if r["error"]))
+            valid, total = fragment_validity(rows, samples_by_id)
+            frags.append(valid / total * 100 if total else 100)
+        am, _ = mean_std(accs)
+        fm, _ = mean_std(f1s)
+        em, _ = mean_std(exacts)
+        rm, _ = mean_std(recalls)
+        tm, _ = mean_std(toks)
+        cm, _ = mean_std(costs)
+        dm, _ = mean_std(durs)
+        vm, _ = mean_std(frags)
+        scheme_rows.append({
+            "name": name,
+            "accuracy": round(am, 1),
+            "f1": round(fm, 2),
+            "exactMatch": round(em, 1),
+            "ruleRecall": round(rm, 1),
+            "tokens": round(tm),
+            "cost": round(cm, 5),
+            "durationMs": round(dm),
+            "errors": max(errs),
+            "fragmentValidity": round(vm, 1),
+        })
+
+    tier_rows = []
+    for tier, label in TIER_LABELS.items():
+        item = {"name": label}
+        for name, _ in schemes:
+            vals = [tier_accuracy(rows, tier) for rows in all_rounds[name]]
+            vals = [v * 100 for v in vals if v is not None]
+            item[name.split(" ")[0]] = round(sum(vals) / len(vals), 1) if vals else None
+        tier_rows.append(item)
+
+    old_cmp = {r.get("scheme"): r.get("strictV3") for r in (old.get("comparison") or [])}
+    comparison_rows = [
+        {"scheme": s["name"], "strictV3": old_cmp.get(s["name"]), "relaxedV4": s["accuracy"]}
+        for s in scheme_rows if old_cmp.get(s["name"]) is not None
+    ]
+
+    by_letter = {s["name"].split(" ")[0]: s for s in scheme_rows}
+    lead = sorted(scheme_rows, key=lambda s: s["accuracy"], reverse=True)
+    b = by_letter.get("B", {})
+    c = by_letter.get("C", {})
+    d = by_letter.get("D", {})
+    token_ratio = (d.get("tokens", 0) / c["tokens"] - 1) * 100 if c.get("tokens") else 0
+    conclusions = [
+        "本轮 v4 复测排序：" + " > ".join(
+            f"{s['name'].split(' ')[0]} {s['accuracy']:.0f}%" for s in lead) + "。"
+        "排序受标签口径影响，二分类里「疑似 = 放行」，需要结合规则召回与可追溯性看。",
+        f"规则召回：C {c.get('ruleRecall', 0):.0f}% / D {d.get('ruleRecall', 0):.0f}% / "
+        f"B {b.get('ruleRecall', 0):.0f}%；保留 C（RAG）的理由是审核员终审需要可追溯的依据，"
+        "而不是单一准确率。",
+        f"D 的规则召回更高，但平均 token 比 C 多 {token_ratio:.0f}%"
+        f"（{d.get('tokens', 0)} vs {c.get('tokens', 0)}），四级精确匹配 "
+        f"{d.get('exactMatch', 0):.0f}% vs {c.get('exactMatch', 0):.0f}%，只作消融对照。",
+        "C 的待修项：多类混排召回不全（top_k=6 装不下）；疑似/违规边界偏严。",
+    ]
+
+    audit_json = {
+        "generatedAt": time.strftime("%Y-%m-%d %H:%M"),
+        "dataset": {
+            "total": len(samples),
+            "selfBuilt": data.get("stats", {}).get("self_built", 0),
+            "public": data.get("stats", {}).get("public", 0),
+            "labelPolicy": (old.get("dataset") or {}).get("labelPolicy") or "放宽口径（v4）",
+            "publicSource": (old.get("dataset") or {}).get("publicSource") or "ToxiCN (ACL 2023)",
+        },
+        "model": "deepseek-flash",
+        "thinking": "关闭（reasoning_effort=none）",
+        "rounds": rounds,
+        "note": "v4 复测（本轮）；结构化结果由 tools/experiment_compare.py 生成",
+        "schemes": scheme_rows,
+        "tiers": tier_rows,
+        "comparison": comparison_rows,
+        "conclusions": conclusions,
+    }
+    with open(audit_path, "w", encoding="utf-8") as f:
+        json.dump(audit_json, f, ensure_ascii=False, indent=2)
+    print(f"结构化结果：{os.path.abspath(audit_path)}")
+
     print("\n=== 汇总 ===")
     for name, _ in schemes:
         accs = [binary_metrics(rows)["accuracy"] for rows in all_rounds[name]]

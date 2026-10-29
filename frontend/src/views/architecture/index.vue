@@ -13,37 +13,101 @@ const layers = [
     no: '01',
     title: '展示层',
     desc: '浏览器里的页面与交互，负责把事实画成图和表。',
+    modules: ['登录与权限守卫', '角色化菜单', '数据看板', '审核工作台', '适配与评测', '设计说明页'],
     tags: ['Vue 3', 'Element Plus', 'ECharts', 'Pinia', 'Vue Router'],
   },
   {
     no: '02',
     title: '接口层',
     desc: '统一入口：登录校验、权限注解、参数校验、异常转换。',
-    tags: ['REST Controller', 'Sa-Token', 'Result', 'GlobalExceptionHandler'],
+    modules: ['REST Controller', 'Sa-Token 拦截器', '@SaCheckPermission', '统一 Result', '全局异常处理', 'Agent HTTP 客户端'],
+    tags: ['Spring MVC', 'Sa-Token', '参数校验', '异常转换'],
   },
   {
     no: '03',
     title: '业务层',
     desc: '管状态机、管数据权限、管 Agent 编排与结果落库。',
+    modules: ['稿件状态机', '审核编排', '适配编排', '人机协同', '看板聚合', '评测读取'],
     tags: ['稿件状态机', '审核编排', '适配编排', '看板聚合'],
   },
   {
     no: '04',
     title: '数据层',
     desc: '16 张表存人、内容、规则、审核与适配记录。',
-    tags: ['MyBatis-Plus', 'MySQL 8', '逻辑删除', '内容哈希'],
+    modules: ['MyBatis-Plus Mapper', '逻辑删除', '内容哈希', '审核记录', '适配版本', '数据权限过滤'],
+    tags: ['MyBatis-Plus', 'MySQL 8', 'Hikari', '事务'],
   },
   {
     no: '05',
     title: '智能体层',
     desc: '独立 Python 服务：检索、定位、判定、格式检查。',
+    modules: ['规则检索 RAG', '关键词定位', '结构化判定', '格式自检', '平台适配', '回放与降级'],
     tags: ['FastAPI', 'judge', 'RAG', 'format_check', 'Provider'],
   },
   {
     no: '06',
     title: '外部服务',
     desc: '语言模型与向量模型，按需调用、失败可降级。',
+    modules: ['DeepSeek 对话', 'bge-m3 向量', 'OpenAI 兼容层', '超时与重试', 'Mock 供应商', '回放缓存'],
     tags: ['DeepSeek', 'SiliconFlow bge-m3', '回放缓存'],
+  },
+]
+
+const zoomLevels = [
+  { level: 'L1', title: '系统拓扑', desc: '浏览器、主系统、智能体、模型四段' },
+  { level: 'L2', title: '六层结构', desc: '每层职责与边界' },
+  { level: 'L3', title: '层内模块', desc: '每层包含的关键模块' },
+  { level: 'L4', title: '代码地图', desc: '目录与文件的落地位置' },
+]
+
+const interfaces = [
+  {
+    from: '浏览器',
+    to: '主系统',
+    protocol: 'HTTP / JSON',
+    detail: 'REST `/api/**`；Sa-Token 请求头；Vite 代理转发；页面级权限由后端菜单下发。',
+    timeout: '30s / 适配 120s',
+    code: 'frontend/src/api/request.js → SpringBoot Controller',
+  },
+  {
+    from: '主系统',
+    to: '智能体',
+    protocol: 'HTTP / JSON',
+    detail: '`POST /api/agent/audit`、`/precheck`、`/adapt`；`X-Agent-Token` 共享令牌；结构化 JSON 返回。',
+    timeout: '审核 30s / 适配 120s',
+    code: 'backend config/AgentClient → agent/api/*.py',
+  },
+  {
+    from: '智能体',
+    to: '语言模型',
+    protocol: 'HTTPS / JSON',
+    detail: 'OpenAI 兼容 Chat Completions；DeepSeek 主供应商，失败可切 Mock；思考模式按请求覆盖。',
+    timeout: '60–90s',
+    code: 'agent/providers/openai_compat.py',
+  },
+  {
+    from: '智能体',
+    to: '向量模型',
+    protocol: 'HTTPS / JSON',
+    detail: 'bge-m3 生成规则切片向量；检索结果缓存；不可用时降级为元规则 + 关键词。',
+    timeout: '30s',
+    code: 'agent/rag.py',
+  },
+  {
+    from: '主系统',
+    to: 'MySQL',
+    protocol: 'JDBC / SQL',
+    detail: 'MyBatis-Plus Mapper；Hikari 连接池；逻辑删除；状态与内容哈希落库。',
+    timeout: '连接池 5',
+    code: 'backend/mapper + service',
+  },
+  {
+    from: '浏览器',
+    to: '图表',
+    protocol: '本地渲染',
+    detail: 'ECharts 按需引入，数据由 REST 接口返回；图表不改变业务口径。',
+    timeout: '无网络请求',
+    code: 'frontend/utils/echarts.js',
   },
 ]
 
@@ -107,13 +171,23 @@ const principles = [
     <section class="arch-hero fade-up">
       <div>
         <div class="kicker">SYSTEM ARCHITECTURE</div>
-        <h1>系统架构</h1>
+        <h1>架构设计</h1>
         <p>从浏览器到模型，一共六层；调用自上而下，信任自下而上。</p>
       </div>
       <el-button plain @click="router.push('/dashboard')">
         <el-icon><Back /></el-icon>
         返回看板
       </el-button>
+    </section>
+
+    <!-- 从整体到局部 -->
+    <section class="zoom-strip fade-up">
+      <div v-for="(z, i) in zoomLevels" :key="z.level" class="zoom-item">
+        <span>{{ z.level }}</span>
+        <b>{{ z.title }}</b>
+        <p>{{ z.desc }}</p>
+        <i v-if="i < zoomLevels.length - 1">→</i>
+      </div>
     </section>
 
     <!-- 拓扑图 -->
@@ -183,8 +257,34 @@ const principles = [
             <b>{{ l.title }}</b>
           </div>
           <p>{{ l.desc }}</p>
+          <div class="module-list">
+            <span v-for="m in l.modules" :key="m">{{ m }}</span>
+          </div>
           <div class="tags">
             <span v-for="t in l.tags" :key="t">{{ t }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 层间接口与通讯 -->
+    <section class="interface-section arch-card fade-up">
+      <div class="section-head">
+        <b>层间接口与通讯方式</b>
+        <span>每一层只通过明确的接口调用下一层，不跨层拿数据库或模型</span>
+      </div>
+      <div class="interface-list">
+        <div v-for="it in interfaces" :key="it.from + it.to" class="interface-row">
+          <div class="if-endpoints">
+            <b>{{ it.from }}</b>
+            <span class="if-arrow">→</span>
+            <b>{{ it.to }}</b>
+          </div>
+          <span class="if-protocol">{{ it.protocol }}</span>
+          <p>{{ it.detail }}</p>
+          <div class="if-meta">
+            <span>{{ it.timeout }}</span>
+            <code>{{ it.code }}</code>
           </div>
         </div>
       </div>
@@ -284,6 +384,52 @@ const principles = [
   border: 1px solid var(--app-line);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(38, 49, 47, 0.045);
+}
+
+.zoom-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.zoom-item {
+  position: relative;
+  padding: 13px 15px;
+  border-radius: 13px;
+  border: 1px solid var(--app-line);
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.zoom-item span {
+  color: var(--app-gold);
+  font-family: var(--app-serif);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.zoom-item b {
+  display: block;
+  margin: 4px 0 3px;
+  font-family: var(--app-serif);
+  font-size: 13px;
+}
+
+.zoom-item p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.zoom-item i {
+  position: absolute;
+  right: -11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #c3b6a5;
+  font-style: normal;
+  z-index: 1;
 }
 
 .topology {
@@ -496,6 +642,91 @@ const principles = [
   line-height: 1.7;
 }
 
+.module-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 9px;
+}
+
+.module-list span {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #fffdf8;
+  border: 1px solid #eee6da;
+  color: #5f5548;
+  font-size: 10px;
+}
+
+.interface-section {
+  margin-top: 22px;
+  padding: 20px;
+}
+
+.interface-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.interface-row {
+  display: grid;
+  grid-template-columns: 190px 120px minmax(0, 1fr) 230px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: #fbf7ef;
+  border: 1px solid #f0e9df;
+}
+
+.if-endpoints {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--app-ink);
+  font-size: 11.5px;
+}
+
+.if-arrow {
+  color: var(--app-gold);
+}
+
+.if-protocol {
+  justify-self: start;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.interface-row p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 10.5px;
+  line-height: 1.7;
+}
+
+.if-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--app-muted);
+  font-size: 9.5px;
+  text-align: right;
+}
+
+.if-meta code {
+  color: #8a7a66;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -628,6 +859,19 @@ const principles = [
   .layer-grid,
   .code-grid {
     grid-template-columns: 1fr;
+  }
+
+  .zoom-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .interface-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .if-meta {
+    text-align: left;
   }
 
   .perf-grid {
