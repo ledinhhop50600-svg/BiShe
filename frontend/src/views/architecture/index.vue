@@ -323,7 +323,7 @@ const principles = [
     <section class="arch-card perf-card fade-up">
       <div class="section-head">
         <b>性能实测</b>
-        <span>单机演示环境 · 2026-10-29 · 详见 docs/性能优化实验.md</span>
+        <span>单机演示环境 · 2026-10-29 · 详见 docs/性能与优化/性能优化实验.md</span>
       </div>
       <div class="perf-grid">
         <div class="perf-item">

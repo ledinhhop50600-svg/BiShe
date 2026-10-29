@@ -1209,7 +1209,7 @@ async function runDemo() {
             <div><h2>复现命令</h2><p>实验脚本依赖后端与 Agent 已启动；适配评估直接调用 Agent。</p></div>
           </div>
           <pre class="commands"># 审核对比实验（4 方案，52 条）
-python tools/experiment_compare.py --rounds 1 --out docs/实验-对比实验-v4-放宽口径.md
+python tools/experiment_compare.py --rounds 1 --out docs/实验报告/实验-对比实验-v4-放宽口径.md
 
 # 适配质量评估（4 篇 × 3 平台）
 python tools/eval_adaptation.py --run-id paper --out-dir docs/eval

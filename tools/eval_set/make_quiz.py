@@ -6,7 +6,7 @@
 之后把结果与我的标注对比，算一致率，并在论文里如实报告分歧。
 
 用法：python tools/eval_set/make_quiz.py
-输出：docs/标注复核问卷-v1.md
+输出：docs/评测与标注/标注复核问卷-v1.md
 """
 
 import json
@@ -15,7 +15,7 @@ import random
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLES = os.path.join(HERE, "samples.json")
-OUT = os.path.join(HERE, "..", "..", "docs", "标注复核问卷-v1.md")
+OUT = os.path.join(HERE, "..", "..", "docs", "评测与标注", "标注复核问卷-v1.md")
 
 TARGET_TIERS = ("trap", "blind", "pair", "multi")
 SEED = 7

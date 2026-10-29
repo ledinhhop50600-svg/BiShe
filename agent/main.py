@@ -17,7 +17,7 @@ from config import settings
 
 app = FastAPI(
     title="自媒体平台 · 智能体服务",
-    description="内容审核与跨平台适配的智能体服务，按 docs/Agent接口契约-v1.md 实现",
+    description="内容审核与跨平台适配的智能体服务，按 docs/设计文档/Agent接口契约-v1.md 实现",
     version="0.3.0",
 )
 

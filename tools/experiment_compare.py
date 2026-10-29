@@ -10,8 +10,8 @@
 
 用法：
     python tools/experiment_compare.py --rounds 3
-    python tools/experiment_compare.py --localize --rounds 1 --out docs/实验-定位消融.md
-    ZIMEITI_AGENT=http://localhost:8011 python tools/experiment_compare.py --rounds 1 --out docs/实验-模型对比-pro.md
+    python tools/experiment_compare.py --localize --rounds 1 --out docs/实验报告/实验-定位消融.md
+    ZIMEITI_AGENT=http://localhost:8011 python tools/experiment_compare.py --rounds 1 --out docs/实验报告/实验-模型对比-pro.md
 """
 
 import argparse
@@ -219,7 +219,7 @@ def tier_accuracy(rows, tier):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rounds", type=int, default=1)
-    parser.add_argument("--out", default=os.path.join(HERE, "..", "docs", "实验-对比实验-v3.md"))
+    parser.add_argument("--out", default=os.path.join(HERE, "..", "docs", "实验报告", "实验-对比实验-v3.md"))
     parser.add_argument("--title", default="对比实验记录", help="报告标题")
     parser.add_argument("--localize", action="store_true")
     parser.add_argument("--workers", type=int, default=1,

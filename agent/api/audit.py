@@ -1,4 +1,4 @@
-"""接口层：审核 / 预检（对应 docs/Agent接口契约-v1.md 的接口一）。"""
+"""接口层：审核 / 预检（对应 docs/设计文档/Agent接口契约-v1.md 的接口一）。"""
 
 from fastapi import APIRouter, Header
 

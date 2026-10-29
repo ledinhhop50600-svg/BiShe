@@ -7,7 +7,7 @@
     docs/perf/perf-latest.json   原始数据
     docs/perf/memory.png         各进程内存占用图
     docs/perf/latency.png        各场景耗时分配图
-    docs/性能分析报告.md          可读报告
+    docs/性能与优化/性能分析报告.md          可读报告
 
 测量口径：
   - 内存：进程 RSS / Private（PowerShell Get-Process），Java 额外拆堆、Metaspace、线程数；
@@ -462,7 +462,7 @@ def main():
                  "（本次实测约 256 MB RSS，不计入上表）；打包后 `java -jar` 没有这一层，"
                  "`backend/start-low-memory.bat` 会优先运行 jar。\n")
     lines.append("> **MySQL 的 Private**：除 Buffer Pool 外还包含 `performance_schema`；"
-                 "本次拆解与可选的全局配置方案见 `docs/性能优化实验.md`。\n")
+                 "本次拆解与可选的全局配置方案见 `docs/性能与优化/性能优化实验.md`。\n")
     lines.append(f"![内存](perf/memory.png)\n")
 
     lines.append("## 二、耗时分配\n")
@@ -497,7 +497,7 @@ def main():
                  "所以优化重点不是数据库，而是模型选择、输出长度与并发。")
     lines.append("2. **适配已改为并行**：三平台短文从串行约 12.7 s 降到 6.1 s，长文从 21.8 s 降到 9.6 s；"
                  "生产默认按平台并行。串行/并行、合并调用、通用提示词、思考强度的对比见 "
-                 "`docs/实验-速度优化.md`。")
+                 "`docs/性能与优化/实验-速度优化.md`。")
     lines.append(f"3. **内存大头是 MySQL 与后端 JVM**：MySQL Private {mysql_priv} MB（Buffer Pool {procs.get('mysql',{}).get('bufferPoolMB','-')} MB + performance_schema/连接等），"
                  f"后端 RSS {b.get('rss','-')} MB（堆 {jvm.get('heapUsedMB','-')} MB、"
                  f"Metaspace {jvm.get('metaspaceUsedMB','-')} MB，其余是线程栈、Code Cache、直接内存与 JVM 自身）；"
@@ -514,10 +514,10 @@ def main():
     lines.append("- 模型耗时受网络与服务端排队影响，单机单次测量只代表当前时段；本报告取中位数。")
     lines.append("- 数据量是教学演示规模（十几篇稿件），数据库查询耗时不能外推到大数据量。\n")
 
-    with open(os.path.join(ROOT, "docs", "性能分析报告.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "docs", "性能与优化", "性能分析报告.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-    print(f"已生成：docs/性能分析报告.md、docs/perf/perf-latest.json、memory.png、latency.png")
+    print(f"已生成：docs/性能与优化/性能分析报告.md、docs/perf/perf-latest.json、memory.png、latency.png")
     print(f"合计 RSS 约 {after['totalRssMB']} MB；预检总耗时 {precheck['totalMs']}ms，"
           f"其中模型 {precheck['steps'].get('llm_judge',0)}ms")
     return 0

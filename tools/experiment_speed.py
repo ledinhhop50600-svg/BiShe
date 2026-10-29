@@ -8,7 +8,7 @@
   2. 思考：none / low / high 的耗时、token 与判定结果
   3. 长文：串行 vs 并行 vs 合并一次（看是否截断）
 
-产物：docs/实验-速度优化.md、docs/perf/speed-experiment.json、speed.png、reasoning.png
+产物：docs/性能与优化/实验-速度优化.md、docs/perf/speed-experiment.json、speed.png、reasoning.png
 """
 import json
 import os
@@ -396,9 +396,9 @@ def main():
     lines.append("> 质量代理“形态特征”只检查最容易识别的平台标志（小红书 emoji+标签、公众号无标签、"
                  "抖音【画面】/【口播】），不等于完整的人工评分；结论以速度为主，质量只作方向性参考。\n")
 
-    with open(os.path.join(ROOT, "docs", "实验-速度优化.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "docs", "性能与优化", "实验-速度优化.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    print("已生成：docs/实验-速度优化.md、docs/perf/speed-experiment.json、speed.png、reasoning.png")
+    print("已生成：docs/性能与优化/实验-速度优化.md、docs/perf/speed-experiment.json、speed.png、reasoning.png")
     return 0
 
 

@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-10-29",
-  "note": "内存优化前后对照（RSS，单位 MB）；数据来自 docs/性能优化实验.md 的实测，演示模式为 jar + preview。",
+  "note": "内存优化前后对照（RSS，单位 MB）；数据来自 docs/性能与优化/性能优化实验.md 的实测，演示模式为 jar + preview。",
   "memory": [
     { "name": "前端（dev → preview）", "before": 222.4, "after": 98.1, "unit": "MB" },
     { "name": "后端应用 JVM", "before": 209.2, "after": 172.9, "unit": "MB" },

@@ -26,7 +26,7 @@
    适配质量评估（格式满足率 + LLM 评分 + 人工评分），系统内有评测中心。
 
 **明确不做**：不向真实平台发布（个人开发者拿不到各平台发布接口）、不做图片/视频审核、
-没有短信/邮件服务。边界与理由见 `docs/decisions-multiplatform.md`、`docs/decisions-agent.md`。
+没有短信/邮件服务。边界与理由见 `docs/决策与选型/decisions-multiplatform.md`、`docs/决策与选型/decisions-agent.md`。
 
 ### 界面与可视化（2026-10-29 优化）
 
@@ -39,8 +39,8 @@
   性能优化（并行耗时/思考强度/内存构成）与数据明细，全部用图表而不是表格堆砌；
 - **安全与功能补齐（2026-10-29）**：令牌只允许请求头读取、禁用/删除/重置密码立即踢下线、
   改判权限真正校验、登录限流、超长字段 400；稿件封面/阅读量/管理员删除、举报 AI 复审、规则库 CRUD。
-- **性能报告** `docs/性能分析报告.md`：内存与耗时的实测拆分（模型调用占 98% 以上）；
-- **优化实验** `docs/性能优化实验.md`：内存四个方向（前端/后端/MySQL/Agent）与适配并行、思考强度的代价。
+- **性能报告** `docs/性能与优化/性能分析报告.md`：内存与耗时的实测拆分（模型调用占 98% 以上）；
+- **优化实验** `docs/性能与优化/性能优化实验.md`：内存四个方向（前端/后端/MySQL/Agent）与适配并行、思考强度的代价。
 
 ---
 
@@ -52,9 +52,9 @@
 | 前端 | Vue 3.5、Vite 8、Element Plus 2.14、Pinia、Vue Router（JavaScript，非 TypeScript） |
 | 智能体 | Python 3.11、FastAPI、uvicorn、openai SDK（OpenAI 兼容接口）、DeepSeek（可切换硅基流动/智谱） |
 | 数据 | MySQL 8（16 张表）、Agent 侧无数据库（上下文由主系统下发） |
-| 实验 | Python 脚本 + Agent 回放缓存；结果落在 `docs/eval/` 与 `docs/实验-*.md` |
+| 实验 | Python 脚本 + Agent 回放缓存；结果落在 `docs/eval/` 与 `docs/实验报告/` |
 
-> 选型理由、版本核对与替代方案见 `docs/decisions-stack.md`、`docs/技术栈白话说明.md`。
+> 选型理由、版本核对与替代方案见 `docs/决策与选型/decisions-stack.md`、`docs/决策与选型/技术栈白话说明.md`。
 
 ---
 
@@ -204,7 +204,7 @@ REPLAY_ENABLED=true       # 回放缓存，评测与断网演示用
 
 ## 七、演示流程（5-8 分钟）
 
-完整脚本见 `docs/答辩演示脚本.md`，主线：
+完整脚本见 `docs/答辩材料/答辩演示脚本.md`，主线：
 
 1. 创作者登录 → 写一段"明显违规"的文案 → **发布前 AI 预检**（等级/规则/片段/建议）；
 2. 修改后提交 → 审核员工作台 → **运行智能体初审** → 查看依据 → 采纳或改判（改判填原因）；
@@ -226,7 +226,7 @@ python tools/verify_account_revision.py
 python tools/verify_stage6.py
 
 # 审核对比实验（428 条，7 方案；并发 10 约 15-20 分钟）
-python tools/experiment_compare.py --rounds 1 --workers 10 --out docs/实验-对比实验-v5-扩展集.md
+python tools/experiment_compare.py --rounds 1 --workers 10 --out docs/实验报告/实验-对比实验-v5-扩展集.md
 
 # 适配质量评估（4 篇 × 3 平台；约 2-3 分钟）
 python tools/eval_adaptation.py --run-id paper --out-dir docs/eval
@@ -244,7 +244,7 @@ python tools/perf_report.py
 python tools/experiment_speed.py
 ```
 
-实验结论与文件索引见 `docs/实验-总览.md`。
+实验结论与文件索引见 `docs/实验报告/实验-总览.md`。
 
 ### 性能基线（2026-10-29 实测）
 
@@ -259,34 +259,23 @@ python tools/experiment_speed.py
 
 应用口径常驻 RSS 约 515 MB；含 Maven 父进程约 771 MB；改用 jar + preview 的演示模式约 422 MB
 （MySQL 按 Private 校正后约 1.0–1.4 GB）。完整拆分、四个方向与代价见
-`docs/性能优化实验.md`，原始数据见 `docs/性能分析报告.md`。
+`docs/性能与优化/性能优化实验.md`，原始数据见 `docs/性能与优化/性能分析报告.md`。
 
 ---
 
 ## 九、文档索引
 
-| 文档 | 内容 |
+| 分类文件夹 | 里面放什么 |
 |---|---|
-| `docs/系统功能说明.md` | 系统到底做什么、三种角色、场景 |
-| `docs/数据库设计文档.md` | 16 张表、关系与设计取舍 |
-| `docs/Agent接口契约-v1.md` | 审核/适配接口字段与错误码（v1.1） |
-| `docs/人机协同设计说明.md` | 初审/采纳/改判/过期/统计口径 |
-| `docs/适配规则与提示词设计说明.md` | 平台约束、提示词、格式自检 |
-| `docs/decisions-*.md` | 关键决策与理由（多平台、技术栈、工作方式） |
-| `docs/实验-总览.md` | 审核/适配实验结论汇总 |
-| `docs/实验-对比实验-v5-扩展集.md` | 428 条扩展集、七方案原始结果 |
-| `docs/实验-扩展集-C1-E2分析.md` | E1 规则目录 / C1 紧凑 RAG / E2 后置归因的取舍与核心/公开集拆分 |
-| `docs/实验-速度优化.md` | 适配策略（串行/并行/统一/通用）与思考强度的原始数据 |
-| `docs/性能分析报告.md` | 内存占用与耗时分配的实测报告 |
-| `docs/性能优化实验.md` | 内存四个方向的尝试、并行适配与思考强度的代价 |
-| `docs/安全修复方案.md` | 安全审查发现的 P0/P1 改法、验收与执行顺序 |
-| `docs/测试用例与执行记录.md` | 测试用例与执行结果 |
-| `docs/答辩问答-20问.md` | 高频问题与回答 |
-| `docs/答辩演示脚本.md` | 演示顺序、话术、保底方案 |
-| `docs/notes/阶段*-开发笔记.md` | 每个阶段的开发记录与踩坑 |
-| `docs/notes/优化-界面与性能.md` | 视觉主题、看板、架构页与性能实测的记录 |
-| `docs/notes/优化-评测与设计页.md` | 评测中心可视化、需求/架构设计页与对比实验复测记录 |
-| `docs/notes/UI与交互修复.md` | 自动初审、AI 意见预填、表格/侧边栏/散点图修复与多账号演示数据 |
+| `docs/设计文档/` | 系统功能说明、数据库设计文档、人机协同设计说明、适配规则与提示词设计说明、Agent 接口契约 |
+| `docs/决策与选型/` | 技术栈 / 多平台 / Agent / 工作方式四份决策记录，以及技术栈白话说明 |
+| `docs/实验报告/` | 实验总览、对比实验 v1–v5、C1/E2 扩展集分析、定位消融、模型对比 |
+| `docs/性能与优化/` | 性能分析报告、内存与速度优化实验、适配速度实验原始数据 |
+| `docs/评测与标注/` | 人工标注一致性报告、标注复核问卷 |
+| `docs/答辩材料/` | 答辩演示脚本、答辩问答 20 问、中期汇报文档 |
+| `docs/过程管理/` | 阶段划分、待优化清单、测试用例与执行记录、安全修复方案 |
+| `docs/开发笔记/` | 每个阶段的开发笔记与优化记录 |
+| `docs/eval/`、`docs/perf/` | 评测/性能脚本产出的 JSON、评分表与图表（评测中心按固定路径读取，勿移动） |
 
 ---
 
@@ -307,7 +296,7 @@ python tools/experiment_speed.py
 关掉对应的旧窗口，或改 `server.port` / Vite 端口；`start.bat` 会跳过已在运行的服务。
 
 **Q：C 盘空间不足？**
-Maven/npm 缓存已指向 E 盘（见 `docs/decisions-*`）；如在新机器上，先设置
+Maven/npm 缓存已指向 E 盘（见 `docs/决策与选型/decisions-process.md`）；如在新机器上，先设置
 `MAVEN_OPTS`/`.m2/settings.xml` 与 `npm config set cache`。
 
 **Q：想重置演示数据？**
