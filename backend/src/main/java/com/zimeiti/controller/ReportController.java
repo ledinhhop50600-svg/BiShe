@@ -6,6 +6,8 @@ import com.zimeiti.common.Result;
 import com.zimeiti.dto.ReportHandleDTO;
 import com.zimeiti.service.ReportService;
 import com.zimeiti.vo.ReportVO;
+
+import java.util.Map;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,5 +50,12 @@ public class ReportController {
     public Result<Void> handle(@PathVariable Long id, @Valid @RequestBody ReportHandleDTO dto) {
         reportService.handle(id, dto);
         return Result.ok();
+    }
+
+    /** 举报复审：调用智能体并落 audit_record，供审核员参考；不自动改稿件状态 */
+    @PostMapping("/{id}/agent-review")
+    @SaCheckPermission("report:handle")
+    public Result<Map<String, Object>> agentReview(@PathVariable Long id) {
+        return Result.ok(reportService.agentReview(id));
     }
 }

@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getArticle } from '@/api/article'
 import { checkText } from '@/api/sensitive'
-import { handleReport, pageReports } from '@/api/report'
+import { agentReviewReport, handleReport, pageReports } from '@/api/report'
 
 /**
  * 举报处理（管理员/审核员）：处理创作者对已发布稿件的举报。
@@ -18,6 +18,10 @@ const dialogVisible = ref(false)
 const current = ref(null)
 const form = reactive({ status: 1, remark: '' })
 const submitting = ref(false)
+const agentLoading = ref(false)
+const agentVisible = ref(false)
+const agentResult = ref(null)
+const agentTarget = ref(null)
 
 // 被举报稿件的详情（审核员需要看到正文才能判断举报是否成立）
 const detailVisible = ref(false)
@@ -65,6 +69,18 @@ function openHandle(row) {
   form.status = 1
   form.remark = ''
   dialogVisible.value = true
+}
+
+async function runAgentReview(row) {
+  agentTarget.value = row
+  agentResult.value = null
+  agentVisible.value = true
+  agentLoading.value = true
+  try {
+    agentResult.value = await agentReviewReport(row.id)
+  } finally {
+    agentLoading.value = false
+  }
 }
 
 async function submit() {
@@ -116,8 +132,9 @@ async function submit() {
         </el-table-column>
         <el-table-column prop="handlerName" label="处理人" width="110" />
         <el-table-column prop="handleTime" label="处理时间" width="170" />
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="row.status === 0" v-perm="'report:handle'" link type="warning" @click="runAgentReview(row)">AI 复审</el-button>
             <el-button v-if="row.status === 0" v-perm="'report:handle'" link type="primary" @click="openHandle(row)">处理</el-button>
             <el-button v-else link type="info" disabled>已处理</el-button>
           </template>
@@ -151,7 +168,7 @@ async function submit() {
           </el-radio-group>
         </el-form-item>
         <el-form-item label="处理意见">
-          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="说明处理依据，便于后续追溯" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="说明处理依据，便于后续追溯" />
         </el-form-item>
       </el-form>
 
@@ -159,6 +176,34 @@ async function submit() {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit">提交处理</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="agentVisible" title="举报稿件 AI 复审" width="640px">
+      <div v-loading="agentLoading">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="被举报稿件">{{ agentTarget?.articleTitle }}</el-descriptions-item>
+          <el-descriptions-item label="举报理由">{{ agentTarget?.reason }}</el-descriptions-item>
+        </el-descriptions>
+        <el-alert v-if="agentResult?.agentFailed" type="warning" :closable="false" class="block">
+          <template #title>{{ agentResult.message || '智能体不可用，请改为人工判断' }}</template>
+        </el-alert>
+        <template v-else-if="agentResult">
+          <div class="agent-line">
+            判定：<el-tag :type="agentResult.riskLevel >= 2 ? 'danger' : 'success'" size="small">
+              {{ agentResult.riskLevelText || ['通过', '疑似', '违规', '严重'][agentResult.riskLevel] }}
+            </el-tag>
+            <span class="agent-reason">{{ agentResult.reason }}</span>
+          </div>
+          <div v-if="agentResult.hitRules?.length" class="agent-line">
+            命中规则：<el-tag v-for="r in agentResult.hitRules" :key="r.code" type="warning" size="small" class="tag">{{ r.code }}</el-tag>
+          </div>
+          <el-alert type="info" :closable="false" class="block">
+            <template #title>复审只供参考，是否下架仍由你上面的“处理举报”决定；本次复审已写入审核记录。</template>
+          </el-alert>
+        </template>
+        <el-empty v-else-if="!agentLoading" description="智能体未返回结果" />
+      </div>
+      <template #footer><el-button @click="agentVisible = false">关闭</el-button></template>
     </el-dialog>
 
     <!-- 稿件详情：审核员需要看到正文，才能判断举报是否成立 -->
@@ -228,6 +273,17 @@ async function submit() {
 
 .line {
   margin-bottom: 8px;
+}
+
+.agent-line {
+  margin-top: 12px;
+  line-height: 1.8;
+  font-size: 13px;
+}
+
+.agent-reason {
+  margin-left: 6px;
+  color: #4b5563;
 }
 
 .msg {

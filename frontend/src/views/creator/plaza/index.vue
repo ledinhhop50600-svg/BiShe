@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { plazaArticles } from '@/api/article'
+import { getArticle, plazaArticles } from '@/api/article'
 import { listCategories, listTags } from '@/api/category'
 import { createReport } from '@/api/report'
 import { useUserStore } from '@/stores/user'
@@ -33,10 +33,17 @@ const submitting = ref(false)
 // 查看全文：只看标题和摘要没法判断是否值得举报
 const detailVisible = ref(false)
 const detail = ref(null)
+const detailLoading = ref(false)
 
-function openDetail(item) {
+async function openDetail(item) {
   detail.value = item
   detailVisible.value = true
+  detailLoading.value = true
+  try {
+    detail.value = await getArticle(item.id)
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -128,9 +135,10 @@ async function submitReport() {
           <span>{{ item.authorName }}</span>
           <span>{{ item.categoryName || '未分类' }}</span>
         </div>
+        <img v-if="item.coverImage" :src="item.coverImage" class="item-cover" alt="封面" />
         <div class="item-summary">{{ item.summary || item.content?.slice(0, 80) + '...' }}</div>
         <div class="item-footer">
-          <span class="time">{{ item.publishTime?.replace('T', ' ').slice(0, 16) }}</span>
+          <span class="time">{{ item.publishTime?.replace('T', ' ').slice(0, 16) }} · 阅读 {{ item.viewCount || 0 }}</span>
           <div>
             <el-button link type="primary" @click="openDetail(item)">查看全文</el-button>
             <el-button v-if="!isMine(item)" link type="danger" @click="openReport(item)">举报</el-button>
@@ -168,19 +176,23 @@ async function submitReport() {
 
     <!-- 查看全文：内容判定完再决定是否举报 -->
     <el-dialog v-model="detailVisible" :title="detail?.title || '内容详情'" width="720px">
+      <div v-loading="detailLoading">
       <template v-if="detail">
+        <img v-if="detail.coverImage" :src="detail.coverImage" class="detail-cover" alt="封面" />
         <el-descriptions :column="3" border size="small">
           <el-descriptions-item label="作者">{{ detail.authorName }}</el-descriptions-item>
           <el-descriptions-item label="分类">{{ detail.categoryName || '未分类' }}</el-descriptions-item>
           <el-descriptions-item label="发布时间">
             {{ detail.publishTime?.replace('T', ' ').slice(0, 16) }}
           </el-descriptions-item>
+          <el-descriptions-item label="阅读量">{{ detail.viewCount || 0 }}</el-descriptions-item>
         </el-descriptions>
         <div class="content-box">{{ detail.content }}</div>
         <div v-if="detail.tagNames?.length" class="detail-tags">
           标签：<el-tag v-for="t in detail.tagNames" :key="t" size="small" type="info" class="tag">{{ t }}</el-tag>
         </div>
       </template>
+      </div>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
         <el-button v-if="detail && !isMine(detail)" type="danger" @click="detailVisible = false; openReport(detail)">
@@ -223,6 +235,15 @@ async function submitReport() {
   margin-bottom: 8px;
 }
 
+.item-cover {
+  width: 100%;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #f6f1e8;
+}
+
 .item-summary {
   font-size: 13px;
   color: #4b5563;
@@ -250,6 +271,15 @@ async function submitReport() {
 
 .block {
   margin-top: 12px;
+}
+
+.detail-cover {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #f6f1e8;
 }
 
 .content-box {

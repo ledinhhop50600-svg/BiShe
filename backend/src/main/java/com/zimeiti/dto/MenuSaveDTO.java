@@ -2,6 +2,7 @@ package com.zimeiti.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -18,6 +19,7 @@ public class MenuSaveDTO {
     private Long parentId;
 
     @NotBlank(message = "菜单名称不能为空")
+    @Size(max = 50, message = "菜单名称最长 50 个字符")
     private String menuName;
 
     /** M 目录 / C 菜单页面 / F 按钮权限 */
@@ -25,14 +27,18 @@ public class MenuSaveDTO {
     private String menuType;
 
     /** 前端路由地址（目录与菜单页面需要） */
+    @Size(max = 200, message = "路由地址最长 200 个字符")
     private String path;
 
     /** 前端组件路径（菜单页面需要） */
+    @Size(max = 200, message = "组件路径最长 200 个字符")
     private String component;
 
     /** 权限标识，如 article:list */
+    @Size(max = 100, message = "权限标识最长 100 个字符")
     private String perms;
 
+    @Size(max = 50, message = "图标最长 50 个字符")
     private String icon;
 
     @NotNull(message = "请填写排序号")

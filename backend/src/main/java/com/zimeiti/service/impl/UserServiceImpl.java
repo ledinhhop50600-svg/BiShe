@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -98,11 +99,26 @@ public class UserServiceImpl implements UserService {
         if (StringUtils.hasText(dto.getPassword())) {
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
+        // 安全兜底：不能把最后一个管理员改成非管理员
+        if (isAdminUser(dto.getId()) && !containsAdminRole(dto.getRoleIds()) && activeAdminCount() <= 1) {
+            throw new BizException("不能移除最后一个管理员的角色");
+        }
         userMapper.updateById(user);
 
+        List<Long> oldRoleIds = userRoleMapper.selectList(Wrappers.<SysUserRole>lambdaQuery()
+                        .eq(SysUserRole::getUserId, dto.getId()))
+                .stream().map(SysUserRole::getRoleId).toList();
         // 角色关系整体覆盖
         userRoleMapper.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId, dto.getId()));
         saveUserRoles(dto.getId(), dto.getRoleIds());
+
+        // 密码或角色变了：旧会话不应继续持有旧权限/旧凭据
+        boolean passwordChanged = StringUtils.hasText(dto.getPassword());
+        boolean rolesChanged = !new HashSet<>(oldRoleIds).equals(new HashSet<>(
+                dto.getRoleIds() == null ? List.of() : dto.getRoleIds()));
+        if (passwordChanged || rolesChanged) {
+            StpUtil.kickout(dto.getId());
+        }
     }
 
     @Override
@@ -114,10 +130,17 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BizException("用户不存在");
         }
+        if (Integer.valueOf(0).equals(status) && isAdminUser(id) && activeAdminCount() <= 1) {
+            throw new BizException("不能禁用最后一个管理员");
+        }
         SysUser update = new SysUser();
         update.setId(id);
         update.setStatus(status);
         userMapper.updateById(update);
+        // 禁用后立即踢掉该用户所有令牌；启用不需要踢
+        if (Integer.valueOf(0).equals(status)) {
+            StpUtil.kickout(id);
+        }
     }
 
     @Override
@@ -133,6 +156,8 @@ public class UserServiceImpl implements UserService {
         update.setId(id);
         update.setPassword(passwordEncoder.encode(newPassword));
         userMapper.updateById(update);
+        // 管理员重置密码后，旧密码对应的会话必须失效
+        StpUtil.kickout(id);
     }
 
     @Override
@@ -151,6 +176,8 @@ public class UserServiceImpl implements UserService {
         // 如果原样保留账号名，这个名字就永远无法再被使用（新用户创建时会撞数据库唯一约束，
         // 报出一个看不懂的 SQL 错误）。改成 原名#del<id>，既释放了账号名，
         // 又保留了"这个名字曾经属于谁"的可追溯信息。
+        // 删除前先踢下线，避免"已删除账号还能用旧令牌读数据"
+        StpUtil.kickout(id);
         SysUser renamed = new SysUser();
         renamed.setId(id);
         renamed.setUsername(user.getUsername() + "#del" + id);
@@ -159,6 +186,34 @@ public class UserServiceImpl implements UserService {
         // 逻辑删除：数据仍在库里，只是查询时被过滤掉（平台数据需要可追溯）
         userMapper.deleteById(id);
         userRoleMapper.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId, id));
+    }
+
+    private boolean isAdminUser(Long userId) {
+        return roleMapper.selectRoleKeysByUserId(userId).contains("admin");
+    }
+
+    private boolean containsAdminRole(List<Long> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return false;
+        }
+        var admin = roleMapper.selectOne(Wrappers.<com.zimeiti.entity.SysRole>lambdaQuery()
+                .eq(com.zimeiti.entity.SysRole::getRoleKey, "admin"));
+        return admin != null && roleIds.contains(admin.getId());
+    }
+
+    /** 演示规模：逐个查状态足够；数据量大时应改成一条 join 统计。 */
+    private long activeAdminCount() {
+        var admin = roleMapper.selectOne(Wrappers.<com.zimeiti.entity.SysRole>lambdaQuery()
+                .eq(com.zimeiti.entity.SysRole::getRoleKey, "admin"));
+        if (admin == null) {
+            return 0;
+        }
+        return userRoleMapper.selectList(Wrappers.<SysUserRole>lambdaQuery()
+                        .eq(SysUserRole::getRoleId, admin.getId()))
+                .stream().map(SysUserRole::getUserId).distinct()
+                .map(userMapper::selectById)
+                .filter(u -> u != null && Integer.valueOf(1).equals(u.getStatus()))
+                .count();
     }
 
     private boolean usernameExists(String username, Long excludeId) {

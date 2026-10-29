@@ -1,6 +1,7 @@
 package com.zimeiti.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -18,5 +19,6 @@ public class ArticleReviewDTO {
     private String action;
 
     /** 审核意见 / 驳回原因（驳回与阻断时必填），会直接展示给创作者 */
+    @Size(max = 1000, message = "审核意见最长 1000 个字符")
     private String reason;
 }

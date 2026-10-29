@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ public class BizTag {
     private Long id;
 
     @NotBlank(message = "标签名不能为空")
+    @Size(max = 30, message = "标签名最长 30 个字符")
     private String name;
 
     private LocalDateTime createTime;

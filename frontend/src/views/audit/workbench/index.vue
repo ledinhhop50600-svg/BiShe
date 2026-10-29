@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { agentAudit, getAuditFeedback, pageArticles, reviewArticle } from '@/api/article'
 import { checkText } from '@/api/sensitive'
 import { riskText, riskType } from '@/utils/articleStatus'
+import { useUserStore } from '@/stores/user'
 
 /**
  * 审核工作台（审核员视角）。
@@ -24,6 +25,8 @@ const agentLoading = ref(false)
 const feedback = ref(null)
 
 const form = reactive({ action: 'approve', reason: '' })
+const userStore = useUserStore()
+const canRejudge = computed(() => userStore.hasPermission('audit:rejudge'))
 
 const record = computed(() => feedback.value?.record || null)
 
@@ -142,6 +145,10 @@ async function submit() {
   }
   if ((form.action === 'reject' || form.action === 'block') && !form.reason.trim()) {
     ElMessage.warning('驳回或阻断时请填写原因，创作者需要知道怎么改')
+    return
+  }
+  if (isOverride.value && !canRejudge.value) {
+    ElMessage.warning('没有改判权限：请使用采纳，或联系管理员分配 audit:rejudge')
     return
   }
   if (isOverride.value && !form.reason.trim()) {
@@ -320,7 +327,8 @@ async function submit() {
                 />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :loading="submitting" @click="submit">提交审核结果</el-button>
+                <el-button type="primary" :loading="submitting" :disabled="isOverride && !canRejudge" @click="submit">提交审核结果</el-button>
+                <el-tag v-if="isOverride && !canRejudge" type="warning" size="small" class="ml">没有改判权限</el-tag>
               </el-form-item>
             </el-form>
           </template>

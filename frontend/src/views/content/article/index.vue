@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { offlineArticle, pageArticles } from '@/api/article'
+import { deleteArticle, offlineArticle, pageArticles } from '@/api/article'
 import { listCategories } from '@/api/category'
 import { checkText } from '@/api/sensitive'
 import { ARTICLE_STATUS, riskText, riskType, statusText, statusType } from '@/utils/articleStatus'
@@ -71,6 +71,18 @@ async function onOffline(row) {
   detailVisible.value = false
   await load()
 }
+
+async function onDelete(row) {
+  await ElMessageBox.confirm(
+    `确定删除《${row.title}》吗？这是逻辑删除，审核记录仍保留。`,
+    '删除稿件',
+    { type: 'warning', confirmButtonText: '删除' }
+  )
+  await deleteArticle(row.id)
+  ElMessage.success('已删除')
+  detailVisible.value = false
+  await load()
+}
 </script>
 
 <template>
@@ -125,8 +137,9 @@ async function onOffline(row) {
             <el-tag :type="riskType(row.riskLevel)" size="small" effect="plain">{{ riskText(row.riskLevel) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="viewCount" label="阅读" width="80" />
         <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">查看</el-button>
             <el-button
@@ -138,6 +151,7 @@ async function onOffline(row) {
             >
               下架
             </el-button>
+            <el-button v-perm="'article:delete'" link type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -165,11 +179,13 @@ async function onOffline(row) {
           <el-descriptions-item label="风险等级">
             <el-tag :type="riskType(current.riskLevel)" size="small">{{ riskText(current.riskLevel) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="阅读量">{{ current.viewCount || 0 }}</el-descriptions-item>
           <el-descriptions-item label="标签" :span="2">
             <el-tag v-for="t in current.tagNames" :key="t" size="small" type="info" class="tag">{{ t }}</el-tag>
           </el-descriptions-item>
         </el-descriptions>
 
+        <img v-if="current.coverImage" :src="current.coverImage" class="detail-cover" alt="封面" />
         <div class="content-box">{{ current.content }}</div>
 
         <el-alert v-if="current.rejectReason" type="warning" :closable="false" class="block">
@@ -225,6 +241,15 @@ async function onOffline(row) {
 .pagination {
   margin-top: 14px;
   justify-content: flex-end;
+}
+
+.detail-cover {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 12px;
+  background: #f6f1e8;
 }
 
 .content-box {

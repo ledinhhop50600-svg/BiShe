@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -24,10 +25,12 @@ public class AuditPlatform {
 
     /** 平台标识（英文，程序用）：wechat / xiaohongshu / weibo / bilibili / douyin */
     @NotBlank(message = "平台标识不能为空")
+    @Size(max = 50, message = "平台标识最长 50 个字符")
     private String platformKey;
 
     /** 平台名称（显示用） */
     @NotBlank(message = "平台名称不能为空")
+    @Size(max = 50, message = "平台名称最长 50 个字符")
     private String platformName;
 
     /** 标题字数上限 */
@@ -37,9 +40,11 @@ public class AuditPlatform {
     private Integer contentMaxLen;
 
     /** 话题标签规则描述 */
+    @Size(max = 200, message = "标签规则最长 200 个字符")
     private String tagRule;
 
     /** 内容风格要求 */
+    @Size(max = 500, message = "风格要求最长 500 个字符")
     private String styleDesc;
 
     private Integer sort;

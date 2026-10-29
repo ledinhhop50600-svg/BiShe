@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 认证服务实现。
@@ -41,6 +42,18 @@ public class AuthServiceImpl implements AuthService {
     private final SysUserRoleMapper userRoleMapper;
     private final CaptchaService captchaService;
     private final PasswordEncoder passwordEncoder;
+
+    // 登录限流：本地演示不引入 Redis，单实例内存计数即可；多实例部署要换成 Redis。
+    private static final int MAX_FAILURES = 5;
+    private static final long WINDOW_MS = 5 * 60 * 1000L;
+    private static final long LOCK_MS = 5 * 60 * 1000L;
+    private final Map<String, Attempt> attempts = new ConcurrentHashMap<>();
+
+    private static final class Attempt {
+        int failures;
+        long windowStart;
+        long lockedUntil;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -91,17 +104,23 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginVO login(LoginDTO dto) {
+        String username = dto.getUsername().trim();
+        String attemptKey = username.toLowerCase();
+        assertNotLocked(attemptKey);
+
         SysUser user = userMapper.selectOne(
-                Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername, dto.getUsername().trim()));
+                Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername, username));
 
         // 账号不存在与密码错误返回同一句提示：避免被用来试探系统里有哪些账号
         if (user == null || !passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            recordFailure(attemptKey);
             throw new BizException("账号或密码错误");
         }
         if (Integer.valueOf(0).equals(user.getStatus())) {
             throw new BizException("账号已被禁用，请联系管理员");
         }
 
+        attempts.remove(attemptKey);
         // 登录成功：Sa-Token 生成令牌并记录登录状态（loginId 用用户 id）
         StpUtil.login(user.getId());
 
@@ -126,6 +145,36 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void logout() {
         StpUtil.logout();
+    }
+
+    private void assertNotLocked(String key) {
+        Attempt attempt = attempts.get(key);
+        if (attempt == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (attempt.lockedUntil > now) {
+            long seconds = Math.max(1, (attempt.lockedUntil - now) / 1000);
+            throw new BizException(429, "登录尝试过多，请 " + seconds + " 秒后再试");
+        }
+    }
+
+    private synchronized void recordFailure(String key) {
+        long now = System.currentTimeMillis();
+        Attempt attempt = attempts.computeIfAbsent(key, k -> {
+            Attempt a = new Attempt();
+            a.windowStart = now;
+            return a;
+        });
+        if (now - attempt.windowStart > WINDOW_MS) {
+            attempt.failures = 0;
+            attempt.windowStart = now;
+            attempt.lockedUntil = 0;
+        }
+        attempt.failures++;
+        if (attempt.failures >= MAX_FAILURES) {
+            attempt.lockedUntil = now + LOCK_MS;
+        }
     }
 
     /**

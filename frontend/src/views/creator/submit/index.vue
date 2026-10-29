@@ -28,6 +28,7 @@ const form = reactive({
   categoryId: null,
   tagIds: [],
   summary: '',
+  coverImage: '',
   content: '',
 })
 
@@ -68,6 +69,7 @@ onMounted(async () => {
       categoryId: article.categoryId,
       tagIds: article.tagIds || [],
       summary: article.summary || '',
+      coverImage: article.coverImage || '',
       content: article.content,
     })
   }
@@ -180,6 +182,12 @@ async function runCheck() {
         <el-form-item label="摘要">
           <el-input v-model="form.summary" maxlength="500" show-word-limit placeholder="选填，列表页展示用" />
         </el-form-item>
+        <el-form-item label="封面">
+          <div class="cover-row">
+            <el-input v-model="form.coverImage" maxlength="255" show-word-limit placeholder="选填：封面图片 URL（不填则显示默认封面）" />
+            <img v-if="form.coverImage" :src="form.coverImage" class="cover-preview" alt="封面预览" />
+          </div>
+        </el-form-item>
         <el-form-item label="正文" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="14" placeholder="正文内容" />
         </el-form-item>
@@ -255,6 +263,22 @@ async function runCheck() {
 
 .block {
   margin-top: 16px;
+}
+
+.cover-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.cover-preview {
+  width: 88px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--app-line);
+  background: #f6f1e8;
 }
 
 .line {

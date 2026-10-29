@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -25,10 +26,12 @@ public class AuditSensitiveWord {
     private Long id;
 
     @NotBlank(message = "敏感词不能为空")
+    @Size(max = 100, message = "敏感词最长 100 个字符")
     private String word;
 
     /** 所属类别：与审核规则的类别保持一致，便于对比 */
     @NotBlank(message = "请选择类别")
+    @Size(max = 30, message = "类别最长 30 个字符")
     private String category;
 
     /** 命中后的处理等级：1 疑似，2 违规，3 严重 */

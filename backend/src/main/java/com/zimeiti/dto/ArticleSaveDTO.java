@@ -21,11 +21,13 @@ public class ArticleSaveDTO {
     private String title;
 
     @NotBlank(message = "正文不能为空")
+    @Size(max = 50000, message = "正文过长")
     private String content;
 
     @Size(max = 500, message = "摘要最长 500 个字符")
     private String summary;
 
+    @Size(max = 255, message = "封面地址最长 255 个字符")
     private String coverImage;
 
     private Long categoryId;

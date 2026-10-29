@@ -63,7 +63,8 @@ public class AuditAgentService {
             Map<String, Object> result = agentClient.audit(request);
             // 正式审核（POST_AUDIT）必须留痕；发布前预检只是给创作者的提示，不写入审核记录，
             // 否则每点一次"预检"就多一条记录，会污染工作台与统计。
-            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT
+                    || AuditTriggerType.of(triggerType) == AuditTriggerType.REPORT_REVIEW) {
                 Long recordId = auditRecordService.saveAgentResult(
                         article.getId(), triggerType, null, contentHash, result, false, null);
                 result.put("auditRecordId", recordId);
@@ -72,7 +73,8 @@ public class AuditAgentService {
         } catch (AgentClient.AgentUnavailableException e) {
             log.warn("智能体不可用，已降级为人工审核：{}", e.getMessage());
             Map<String, Object> degraded = degraded(e.getMessage(), "智能体服务不可用，请改为人工审核");
-            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT) {
+            if (AuditTriggerType.of(triggerType) == AuditTriggerType.POST_AUDIT
+                    || AuditTriggerType.of(triggerType) == AuditTriggerType.REPORT_REVIEW) {
                 Long recordId = auditRecordService.saveAgentResult(
                         article.getId(), triggerType, null, contentHash, Map.of(), true, e.getMessage());
                 degraded.put("auditRecordId", recordId);

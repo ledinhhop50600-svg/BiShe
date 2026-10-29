@@ -1,6 +1,7 @@
 package com.zimeiti.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -13,5 +14,6 @@ public class ReportHandleDTO {
     @NotNull(message = "请选择处理结果")
     private Integer status;
 
+    @Size(max = 500, message = "处理意见最长 500 个字符")
     private String remark;
 }

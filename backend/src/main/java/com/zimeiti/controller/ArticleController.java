@@ -1,7 +1,9 @@
 package com.zimeiti.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.dev33.satoken.annotation.SaMode;
+import com.zimeiti.common.BizException;
 import com.zimeiti.common.PageResult;
 import com.zimeiti.common.Result;
 import com.zimeiti.dto.ArticleReviewDTO;
@@ -170,7 +172,11 @@ public class ArticleController {
     @GetMapping("/{id}/audit-feedback")
     @SaCheckPermission(value = {"article:list", "audit:workbench", "creator:article"}, mode = SaMode.OR)
     public Result<Map<String, Object>> auditFeedback(@PathVariable Long id) {
-        articleService.detail(id);
+        ArticleVO article = articleService.detail(id);
+        boolean staff = StpUtil.hasPermission("article:list") || StpUtil.hasPermission("audit:workbench");
+        if (!staff && !article.getAuthorId().equals(StpUtil.getLoginIdAsLong())) {
+            throw new BizException(403, "无权查看他人的审核反馈");
+        }
         return Result.ok(auditRecordService.feedback(id));
     }
 }

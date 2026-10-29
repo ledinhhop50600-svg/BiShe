@@ -1,13 +1,16 @@
 package com.zimeiti.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zimeiti.common.BizException;
 import com.zimeiti.common.PageResult;
 import com.zimeiti.dto.RoleSaveDTO;
+import com.zimeiti.entity.SysMenu;
 import com.zimeiti.entity.SysRole;
 import com.zimeiti.entity.SysRoleMenu;
 import com.zimeiti.entity.SysUserRole;
+import com.zimeiti.mapper.SysMenuMapper;
 import com.zimeiti.mapper.SysRoleMapper;
 import com.zimeiti.mapper.SysRoleMenuMapper;
 import com.zimeiti.mapper.SysUserRoleMapper;
@@ -34,6 +37,7 @@ public class RoleServiceImpl implements RoleService {
     private final SysRoleMapper roleMapper;
     private final SysRoleMenuMapper roleMenuMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final SysMenuMapper menuMapper;
 
     @Override
     public PageResult<SysRole> page(long current, long size, String roleName) {
@@ -85,6 +89,11 @@ public class RoleServiceImpl implements RoleService {
         if (roleKeyExists(dto.getRoleKey(), dto.getId())) {
             throw new BizException("角色标识已被其他角色使用：" + dto.getRoleKey());
         }
+        // 安全兜底：管理员可以编辑自己所属的角色，但不能把自己唯一的 system:role 权限移除，
+        // 否则保存成功后连角色管理页都进不来，只能改数据库恢复。
+        if (isMyRole(dto.getId()) && !hasPermission(dto.getMenuIds(), "system:role")) {
+            throw new BizException(400, "不能移除自己的角色管理权限；请先由其他管理员操作");
+        }
         SysRole role = new SysRole();
         role.setId(dto.getId());
         copy(dto, role);
@@ -116,6 +125,21 @@ public class RoleServiceImpl implements RoleService {
 
         roleMapper.deleteById(id);
         roleMenuMapper.delete(Wrappers.<SysRoleMenu>lambdaQuery().eq(SysRoleMenu::getRoleId, id));
+    }
+
+    private boolean isMyRole(Long roleId) {
+        return userRoleMapper.selectCount(Wrappers.<SysUserRole>lambdaQuery()
+                .eq(SysUserRole::getRoleId, roleId)
+                .eq(SysUserRole::getUserId, StpUtil.getLoginIdAsLong())) > 0;
+    }
+
+    private boolean hasPermission(List<Long> menuIds, String permission) {
+        if (menuIds == null || menuIds.isEmpty()) {
+            return false;
+        }
+        return menuMapper.selectBatchIds(menuIds).stream()
+                .map(SysMenu::getPerms)
+                .anyMatch(permission::equals);
     }
 
     private boolean roleKeyExists(String roleKey, Long excludeId) {

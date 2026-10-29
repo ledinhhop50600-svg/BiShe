@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ public class BizCategory {
     private Long id;
 
     @NotBlank(message = "分类名称不能为空")
+    @Size(max = 50, message = "分类名称最长 50 个字符")
     private String name;
 
     @NotNull(message = "请填写排序号")

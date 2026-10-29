@@ -14,3 +14,8 @@ export function createReport(articleId, reason) {
 export function handleReport(id, data) {
   return request.put(`/report/${id}/handle`, data)
 }
+
+/** 举报复审：调用智能体并落审核记录（不自动下架） */
+export function agentReviewReport(id) {
+  return request.post(`/report/${id}/agent-review`, null, { timeout: 90000 })
+}

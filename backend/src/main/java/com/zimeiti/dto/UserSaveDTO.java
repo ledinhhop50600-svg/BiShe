@@ -2,6 +2,7 @@ package com.zimeiti.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -26,19 +27,25 @@ public class UserSaveDTO {
     private String username;
 
     /** 密码：新增时必填；修改时留空表示不改密码 */
+    @Size(max = 64, message = "密码最长 64 个字符")
     private String password;
 
     @NotBlank(message = "昵称不能为空")
     @Size(max = 20, message = "昵称最长 20 个字符")
     private String nickname;
 
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 100, message = "邮箱最长 100 个字符")
     private String email;
 
+    @Pattern(regexp = "^$|^1[3-9][0-9]{9}$", message = "手机号格式不正确")
+    @Size(max = 20, message = "手机号最长 20 个字符")
     private String phone;
 
     @NotNull(message = "请选择状态")
     private Integer status;
 
+    @Size(max = 255, message = "备注最长 255 个字符")
     private String remark;
 
     /** 该用户拥有的角色 id 列表 */

@@ -111,6 +111,19 @@ public class ArticleServiceImpl implements ArticleService {
     public ArticleVO detail(Long id) {
         BizArticle article = mustGet(id);
         assertCanView(article);
+
+        // 浏览量：只统计已发布内容，作者自己和管理/审核人员查看不计入。
+        long me = StpUtil.getLoginIdAsLong();
+        boolean staff = StpUtil.hasPermission("article:list") || StpUtil.hasPermission("audit:workbench");
+        if (Integer.valueOf(STATUS_PUBLISHED).equals(article.getStatus())
+                && !staff && !Long.valueOf(me).equals(article.getAuthorId())) {
+            int next = (article.getViewCount() == null ? 0 : article.getViewCount()) + 1;
+            BizArticle update = new BizArticle();
+            update.setId(article.getId());
+            update.setViewCount(next);
+            articleMapper.updateById(update);
+            article.setViewCount(next);
+        }
         return toVO(article);
     }
 
@@ -256,6 +269,9 @@ public class ArticleServiceImpl implements ArticleService {
             reviewAction = ReviewActions.MANUAL;
         } else if (isOverride(record.getRiskLevel(), action)) {
             reviewAction = ReviewActions.OVERRIDE;
+            if (!StpUtil.hasPermission("audit:rejudge")) {
+                throw new BizException(403, "没有改判权限，请使用采纳或联系管理员");
+            }
             if (!StringUtils.hasText(dto.getReason())) {
                 throw new BizException("改判必须填写原因：请说明为什么不采纳智能体的判定");
             }
@@ -368,7 +384,7 @@ public class ArticleServiceImpl implements ArticleService {
     private BizArticle mustGet(Long id) {
         BizArticle article = articleMapper.selectById(id);
         if (article == null) {
-            throw new BizException("稿件不存在");
+            throw new BizException(404, "稿件不存在");
         }
         return article;
     }
@@ -383,6 +399,11 @@ public class ArticleServiceImpl implements ArticleService {
     /** 数据权限：创作者只能看自己的稿件 */
     private void assertCanView(BizArticle article) {
         if (isStaff()) {
+            return;
+        }
+        // 已发布内容属于平台公开内容，登录用户都可以看详情（内容广场）；
+        // 草稿/待审/驳回/已下架仍然只有作者本人能看。
+        if (Integer.valueOf(STATUS_PUBLISHED).equals(article.getStatus())) {
             return;
         }
         if (!article.getAuthorId().equals(StpUtil.getLoginIdAsLong())) {

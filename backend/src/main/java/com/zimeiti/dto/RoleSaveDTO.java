@@ -23,8 +23,10 @@ public class RoleSaveDTO {
 
     @NotBlank(message = "角色标识不能为空")
     @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "角色标识只能包含字母、数字和下划线")
+    @Size(max = 50, message = "角色标识最长 50 个字符")
     private String roleKey;
 
+    @Size(max = 255, message = "角色说明最长 255 个字符")
     private String description;
 
     @NotNull(message = "请填写排序号")

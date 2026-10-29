@@ -11,6 +11,7 @@ import com.zimeiti.entity.BizReport;
 import com.zimeiti.mapper.BizArticleMapper;
 import com.zimeiti.mapper.BizReportMapper;
 import com.zimeiti.mapper.SysUserMapper;
+import com.zimeiti.service.AuditAgentService;
 import com.zimeiti.service.ReportService;
 import com.zimeiti.vo.ReportVO;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 举报服务实现。
@@ -39,6 +41,7 @@ public class ReportServiceImpl implements ReportService {
     private final BizReportMapper reportMapper;
     private final BizArticleMapper articleMapper;
     private final SysUserMapper userMapper;
+    private final AuditAgentService auditAgentService;
 
     @Override
     public PageResult<ReportVO> page(long current, long size, Integer status) {
@@ -58,6 +61,9 @@ public class ReportServiceImpl implements ReportService {
     public void create(Long articleId, String reason) {
         if (!StringUtils.hasText(reason)) {
             throw new BizException("请填写举报理由");
+        }
+        if (reason.length() > 500) {
+            throw new BizException(400, "举报理由最长 500 个字符");
         }
         BizArticle article = articleMapper.selectById(articleId);
         if (article == null) {
@@ -85,6 +91,21 @@ public class ReportServiceImpl implements ReportService {
         report.setReason(reason);
         report.setStatus(REPORT_PENDING);
         reportMapper.insert(report);
+    }
+
+    @Override
+    public Map<String, Object> agentReview(Long id) {
+        BizReport report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BizException("举报记录不存在");
+        }
+        BizArticle article = articleMapper.selectById(report.getArticleId());
+        if (article == null) {
+            throw new BizException("被举报稿件不存在或已删除");
+        }
+        // 复用正式审核链路；REPORT_REVIEW 会写入 audit_record，但不改稿件状态，
+        // 最终是否下架仍由审核员处理举报时决定。
+        return auditAgentService.audit(article.getId(), "REPORT_REVIEW");
     }
 
     @Override

@@ -4,6 +4,8 @@ import com.zimeiti.common.PageResult;
 import com.zimeiti.dto.ReportHandleDTO;
 import com.zimeiti.vo.ReportVO;
 
+import java.util.Map;
+
 /**
  * 举报服务。
  */
@@ -17,4 +19,7 @@ public interface ReportService {
 
     /** 审核员处理举报：成立则稿件下架，不成立则驳回举报 */
     void handle(Long id, ReportHandleDTO dto);
+
+    /** 对举报稿件运行一次智能体复审（REPORT_REVIEW，落审核记录） */
+    Map<String, Object> agentReview(Long id);
 }
