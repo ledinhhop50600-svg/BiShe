@@ -267,7 +267,8 @@ const ruleRecallOption = computed(() => {
   }
 })
 
-const auditScatterOption = computed(() => {  const rows = auditRows.value
+const auditScatterOption = computed(() => {
+  const rows = auditRows.value
   if (!rows.length) return {}
   const minAcc = Math.min(...rows.map((row) => row.accuracy))
   const maxAcc = Math.max(...rows.map((row) => row.accuracy))
@@ -276,7 +277,7 @@ const auditScatterOption = computed(() => {  const rows = auditRows.value
       formatter: (p) =>
         `${p.data.name}<br/>平均 token：${p.data.value[0]}<br/>准确率：${p.data.value[1]}%`,
     },
-    grid: { left: 48, right: 24, top: 26, bottom: 42 },
+    grid: { left: 48, right: 38, top: 26, bottom: 42 },
     xAxis: {
       type: 'value',
       name: '平均 token',
@@ -296,35 +297,35 @@ const auditScatterOption = computed(() => {  const rows = auditRows.value
     series: [
       {
         type: 'scatter',
-        symbolSize: 30,
+        symbolSize: 18,
         data: rows.map((row, index) => {
           const letter = schemeLetter(row.name)
-          const labelOffset = {
-            A: [0, -12],
-            B: [-30, -18],
-            C1: [-24, 16],
-            C: [0, -24],
-            E2: [30, 18],
-            E1: [24, -16],
-            D: [-24, 16],
-          }[letter] || [0, -10]
+          // 固定标签方位：B/E2 靠近时一个左、一个下；C1/E1/C 同样错开。
+          const labelPosition = {
+            A: 'top',
+            B: 'left',
+            E2: 'bottom',
+            C1: 'left',
+            E1: 'top',
+            C: 'right',
+            D: 'right',
+          }[letter] || 'top'
           return {
             name: row.name,
             value: [row.tokens, row.accuracy],
             itemStyle: { color: SCHEME_COLORS[index % SCHEME_COLORS.length] },
-            label: { offset: labelOffset },
+            label: { position: labelPosition },
           }
         }),
         label: {
           show: true,
           position: 'top',
-          distance: 8,
+          distance: 7,
           color: COLOR.ink,
           fontWeight: 600,
           formatter: (p) => schemeLetter(p.data.name),
         },
-        // B/E2 的 token 与准确率非常接近，默认标签会叠在一起；让 ECharts 自动上下错开。
-        emphasis: { scale: 1.25 },
+        emphasis: { scale: 1.15 },
       },
     ],
   }
