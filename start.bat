@@ -2,6 +2,13 @@
 title 自媒体平台管理系统 - 一键启动
 cd /d %~dp0
 
+rem ---------- 0) 工具链（JDK17 / Maven）----------
+rem 本机工具链在 F:/Dev/toolchains；换机器时按实际路径修改，或把 bin 加入系统 PATH
+if exist "F:/Dev/toolchains/jdk17/bin/java.exe" (
+    set "JAVA_HOME=F:/Dev/toolchains/jdk17"
+    set "PATH=F:/Dev/toolchains/jdk17/bin;F:/Dev/toolchains/maven/bin;%PATH%"
+)
+
 echo.
 echo ==========================================================
 echo    自媒体平台管理系统 · 一键启动

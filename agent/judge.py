@@ -37,26 +37,32 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
     retrieved = False
     rag_enabled = settings.rag_enabled if use_rag is None else use_rag
     if rag_enabled and len(rules) > settings.rag_top_k:
+        started_retrieve = time.time()
         try:
             rules, detail = retrieve(rules, f"{req.title}\n{req.content}"[:2000], settings.rag_top_k,
                                      extra_terms=extra_terms)
             retrieved = True
-            trace.append(TraceStep(step=1, action="retrieve_rules", output=detail))
+            trace.append(TraceStep(step=1, action="retrieve_rules", output=detail,
+                                   durationMs=int((time.time() - started_retrieve) * 1000)))
         except EmbeddingError as e:
             # 检索失败不能拖垮审核：降级为全量规则，并在 trace 里如实记录
             logger.warning("规则检索失败，已降级为全量规则：%s", e)
             trace.append(TraceStep(step=1, action="retrieve_rules_failed",
-                                   output=f"{e}；已降级为全量规则"))
+                                   output=f"{e}；已降级为全量规则",
+                                   durationMs=int((time.time() - started_retrieve) * 1000)))
     else:
         trace.append(TraceStep(step=1, action="load_rules", output=f"本次可用规则 {len(rules)} 条"))
 
     # ---- 2) 关键词定位（可选模式，用于长文降本；未命中则回退全文）----
     content_text = req.content
     if localize_flag:
+        started_localize = time.time()
         content_text, loc_info = localize(req.content, rules, extra_terms=extra_terms)
-        trace.append(TraceStep(step=len(trace) + 1, action="localize", output=loc_info))
+        trace.append(TraceStep(step=len(trace) + 1, action="localize", output=loc_info,
+                               durationMs=int((time.time() - started_localize) * 1000)))
 
     # ---- 3) 调用模型 ----
+    started_llm = time.time()
     try:
         provider = get_provider(settings.provider)
         user_prompt = build_user_prompt(req, rules, retrieved,
@@ -65,6 +71,7 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
     except ProviderError as e:
         # 契约约定：模型不可用返回 503，由主系统降级到人工审核
         raise HTTPException(status_code=503, detail=f"model_unavailable: {e}") from e
+    llm_ms = int((time.time() - started_llm) * 1000)
 
     # ---- 4) 解析并校验模型输出 ----
     try:
@@ -97,9 +104,11 @@ def judge(req: AuditRequest, *, extra_terms: list[str] | None = None,
         for v in (data.get("violations") or [])
     ]
 
-    trace.append(TraceStep(step=2, action="llm_judge", output=f"riskLevel={level}（{risk_text(level)}）"))
+    trace.append(TraceStep(step=2, action="llm_judge", output=f"riskLevel={level}（{risk_text(level)}）",
+                           durationMs=llm_ms))
     if violations:
-        trace.append(TraceStep(step=3, action="locate_violations", output=f"定位到 {len(violations)} 处违规片段"))
+        trace.append(TraceStep(step=3, action="locate_violations",
+                               output=f"定位到 {len(violations)} 处违规片段"))
 
     return AuditResponse(
         requestId=req.requestId,

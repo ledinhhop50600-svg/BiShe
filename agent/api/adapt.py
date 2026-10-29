@@ -68,12 +68,15 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
     for key in keys:
         platform = platform_map[key]
         applicable = _rules_for_platform(req, key)
+        started_platform = time.time()
 
         # ---- 1) 改写 ----
+        started_adapt = time.time()
         try:
             adapted = provider.adapt(ADAPT_SYSTEM_PROMPT, build_adapt_prompt(req, platform))
         except ProviderError as e:
             raise HTTPException(status_code=503, detail=f"model_unavailable: [{key}] {e}") from e
+        adapt_ms = int((time.time() - started_adapt) * 1000)
         prompt_tokens += adapted.prompt_tokens
         completion_tokens += adapted.completion_tokens
         model = adapted.model or model
@@ -109,7 +112,9 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
             rules=applicable,
         )
         try:
+            started_compliance = time.time()
             verdict = judge(audit_req, use_rag=True)
+            compliance_ms = int((time.time() - started_compliance) * 1000)
         except HTTPException as e:
             # 把平台带进错误信息，否则多平台请求失败时不知道是哪个平台
             raise HTTPException(status_code=e.status_code, detail=f"[{key}] {e.detail}") from e
@@ -122,6 +127,9 @@ def adapt(req: AdaptRequest, x_agent_token: str = Header(default="")) -> AdaptRe
             title=title,
             content=content,
             tags=tags,
+            durationMs=int((time.time() - started_platform) * 1000),
+            adaptMs=adapt_ms,
+            complianceMs=compliance_ms,
             formatCheck=fmt,
             compliance=Compliance(
                 riskLevel=verdict.riskLevel,

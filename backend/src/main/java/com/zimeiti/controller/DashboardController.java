@@ -10,6 +10,7 @@ import com.zimeiti.mapper.BizArticleMapper;
 import com.zimeiti.mapper.BizReportMapper;
 import com.zimeiti.mapper.SysUserMapper;
 import com.zimeiti.service.AuditRecordService;
+import com.zimeiti.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,6 +41,17 @@ public class DashboardController {
     private final BizArticleMapper articleMapper;
     private final BizReportMapper reportMapper;
     private final AuditRecordService auditRecordService;
+    private final DashboardService dashboardService;
+
+    /**
+     * 可视化看板总览：卡片、7 天趋势、状态/风险/人工处理分布、平台适配、最近动态。
+     * <p>与 /stats 的分工：/stats 给的是纯数字（旧页面/兼容用），/overview 给的是图表可直接消费的结构。
+     */
+    @GetMapping("/overview")
+    @SaCheckPermission("dashboard:view")
+    public Result<Map<String, Object>> overview() {
+        return Result.ok(dashboardService.overview());
+    }
 
     @GetMapping("/stats")
     @SaCheckPermission("dashboard:view")

@@ -95,6 +95,8 @@ class TraceStep(BaseModel):
     step: int
     action: str
     output: str = ""
+    # 该步骤耗时（毫秒）。审核链路用它做性能拆解：检索 / 定位 / 模型各占多少。
+    durationMs: int = 0
 
 
 class AuditResponse(BaseModel):
@@ -159,6 +161,11 @@ class AdaptResult(BaseModel):
     title: str
     content: str
     tags: list[str] = Field(default_factory=list)
+    # 该平台从改写、格式自检到合规预检的耗时（毫秒）
+    durationMs: int = 0
+    # 拆开看：改写（模型）与合规预检（模型）各花了多久
+    adaptMs: int = 0
+    complianceMs: int = 0
     formatCheck: FormatCheck
     compliance: Compliance
 

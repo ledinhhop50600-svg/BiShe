@@ -4,6 +4,8 @@ import { createPinia } from 'pinia'
 // Element Plus：UI 组件库（表格、按钮、表单等成品控件）
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// 全局视觉主题：暖纸底 + 深青主色 + 铜金点缀
+import './styles/theme.css'
 // 中文语言包：让分页、日期选择器等组件显示中文
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 // Element Plus 图标：菜单里用到的 DataLine / Document 等图标名都来自这里

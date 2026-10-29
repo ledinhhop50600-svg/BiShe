@@ -45,6 +45,13 @@ const routes = [
         component: () => import('@/views/profile/index.vue'),
         meta: { title: '个人中心' },
       },
+      {
+        // 系统架构：技术说明页，所有登录用户可看
+        path: 'architecture',
+        name: 'Architecture',
+        component: () => import('@/views/architecture/index.vue'),
+        meta: { title: '系统架构' },
+      },
 
       // ---------- 系统管理（本阶段实现） ----------
       {

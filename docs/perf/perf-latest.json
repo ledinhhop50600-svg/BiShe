@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-10-29 11:28",
+  "memory": {
+    "before": {
+      "label": "负载前",
+      "at": "2026-10-29 11:28:20",
+      "processes": {
+        "mysql": {
+          "pid": 7180,
+          "rss": 34.2,
+          "private": 662.4,
+          "bufferPoolMB": 128.0
+        },
+        "backend": {
+          "pid": 94816,
+          "rss": 207.9,
+          "private": 266.8,
+          "jvm": {
+            "heapUsedMB": 46.2,
+            "heapCommittedMB": 80.0,
+            "metaspaceUsedMB": 49.6,
+            "metaspaceCommittedMB": 50.4,
+            "threads": 55,
+            "youngGcCount": 11,
+            "youngGcTimeS": 0.06,
+            "fullGcCount": 0,
+            "fullGcTimeS": 0.0
+          }
+        },
+        "agent": {
+          "pid": 95060,
+          "rss": 74.1,
+          "private": 58.2
+        },
+        "frontend": {
+          "pid": 25072,
+          "rss": 499.4,
+          "private": 1434.6
+        }
+      },
+      "totalRssMB": 815.6
+    },
+    "after": {
+      "label": "负载后",
+      "at": "2026-10-29 11:28:53",
+      "processes": {
+        "mysql": {
+          "pid": 7180,
+          "rss": 34.7,
+          "private": 662.5,
+          "bufferPoolMB": 128.0
+        },
+        "backend": {
+          "pid": 94816,
+          "rss": 209.2,
+          "private": 268.6,
+          "jvm": {
+            "heapUsedMB": 40.1,
+            "heapCommittedMB": 80.0,
+            "metaspaceUsedMB": 49.8,
+            "metaspaceCommittedMB": 50.6,
+            "threads": 59,
+            "youngGcCount": 12,
+            "youngGcTimeS": 0.06,
+            "fullGcCount": 0,
+            "fullGcTimeS": 0.0
+          }
+        },
+        "agent": {
+          "pid": 95060,
+          "rss": 74.2,
+          "private": 58.3
+        },
+        "frontend": {
+          "pid": 25072,
+          "rss": 499.4,
+          "private": 1434.6
+        }
+      },
+      "totalRssMB": 817.5
+    }
+  },
+  "latency": {
+    "login": {
+      "totalMs": 197.5
+    },
+    "articlePage": {
+      "totalMs": 86.9
+    },
+    "dashboard": {
+      "totalMs": 52.9
+    },
+    "precheck": {
+      "totalMs": 3146.1,
+      "agentMs": 3084.5,
+      "steps": {
+        "retrieve_rules": 0.5,
+        "llm_judge": 3083.5,
+        "locate_violations": 0.0
+      },
+      "overheadMs": 61.6,
+      "usage": {
+        "promptTokens": 1310,
+        "completionTokens": 493
+      }
+    },
+    "audit": {
+      "totalMs": 4993.5,
+      "agentMs": 4940.0,
+      "steps": {
+        "retrieve_rules": 0.5,
+        "llm_judge": 4939.0,
+        "locate_violations": 0.0
+      },
+      "overheadMs": 53.5,
+      "usage": {
+        "promptTokens": 1363,
+        "completionTokens": 847
+      }
+    },
+    "adapt1": {
+      "totalMs": 3395.2,
+      "agentMs": 3338,
+      "overheadMs": 57.2,
+      "platforms": [
+        {
+          "name": "小红书",
+          "durationMs": 3337,
+          "adaptMs": 1967,
+          "complianceMs": 1370,
+          "formatPassed": true
+        }
+      ]
+    },
+    "adapt3": {
+      "totalMs": 10648.4,
+      "agentMs": 10562,
+      "overheadMs": 86.4,
+      "platforms": [
+        {
+          "name": "小红书",
+          "durationMs": 2835,
+          "adaptMs": 1800,
+          "complianceMs": 1034,
+          "formatPassed": true
+        },
+        {
+          "name": "微信公众号",
+          "durationMs": 3763,
+          "adaptMs": 2132,
+          "complianceMs": 1630,
+          "formatPassed": true
+        },
+        {
+          "name": "抖音",
+          "durationMs": 3964,
+          "adaptMs": 2352,
+          "complianceMs": 1612,
+          "formatPassed": true
+        }
+      ]
+    }
+  }
+}
