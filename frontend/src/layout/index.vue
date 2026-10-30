@@ -37,6 +37,10 @@ function filterVisible(list) {
 
 const menus = computed(() => filterVisible(userStore.menus))
 
+function openAgentDebug() {
+  window.open('http://localhost:8001/debug', '_blank', 'noopener')
+}
+
 async function onLogout() {
   await userStore.logout()
   ElMessage.success('已退出登录')
@@ -84,6 +88,10 @@ async function onLogout() {
             <template #title>架构设计</template>
           </el-menu-item>
         </el-menu>
+        <div class="design-external" @click="openAgentDebug">
+          <el-icon><Monitor /></el-icon>
+          <span v-if="!isCollapse">Agent 调试台</span>
+        </div>
       </div>
     </el-aside>
 
@@ -110,6 +118,7 @@ async function onLogout() {
               <el-dropdown-menu>
                 <el-dropdown-item @click="router.push('/design/requirements')">需求设计</el-dropdown-item>
                 <el-dropdown-item @click="router.push('/architecture')">架构设计</el-dropdown-item>
+                <el-dropdown-item @click="openAgentDebug">Agent 调试台</el-dropdown-item>
                 <el-dropdown-item @click="router.push('/profile')">个人中心</el-dropdown-item>
                 <el-dropdown-item divided @click="onLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -279,6 +288,31 @@ async function onLogout() {
 
 .is-collapse .design-menu :deep(.el-menu-item) {
   margin: 2px 8px;
+}
+
+.design-external {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  margin: 2px 12px 0;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: #aebdb7;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.design-external:hover {
+  background: rgba(255, 255, 255, 0.055);
+  color: #f4e8d6;
+}
+
+.is-collapse .design-external {
+  justify-content: center;
+  margin: 2px 8px 0;
+  padding: 0;
 }
 
 .header {
