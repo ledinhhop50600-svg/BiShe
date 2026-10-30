@@ -6,6 +6,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Iterator
 
 
 @dataclass
@@ -42,3 +43,13 @@ class BaseProvider:
         """
         return self.judge(system_prompt, user_prompt,
                           reasoning_effort=reasoning_effort, max_tokens=max_tokens)
+
+    def judge_stream(self, system_prompt: str, user_prompt: str,
+                     reasoning_effort: str | None = None,
+                     max_tokens: int | None = None) -> Iterator[dict]:
+        """流式判定（调试页用）。默认实现退化为一次完整调用再切片。"""
+        result = self.judge(system_prompt, user_prompt,
+                            reasoning_effort=reasoning_effort, max_tokens=max_tokens)
+        yield {"type": "delta", "text": result.text}
+        yield {"type": "usage", "promptTokens": result.prompt_tokens,
+               "completionTokens": result.completion_tokens, "model": result.model}

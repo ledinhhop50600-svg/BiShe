@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Runtime · 本地调试控制台</title>
+  <style>
+    :root {
+      --paper: #f6f1e8;
+      --surface: #fffdf8;
+      --ink: #26312f;
+      --muted: #8b8174;
+      --line: #e8dfd2;
+      --teal: #1f5a54;
+      --gold: #b08a5a;
+      --danger: #b8604c;
+      --sage: #7d9a8d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 480px at 0% 0%, #fffaf1 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 100%, #e9f1ed 0%, transparent 50%),
+        var(--paper);
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 22px 28px 16px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark {
+      width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #c7a578, #9c7848); color: #1b302d;
+      font-family: "Songti SC", SimSun, serif; font-size: 20px; font-weight: 700;
+      box-shadow: 0 6px 18px rgba(176,138,90,.24);
+    }
+    .brand b { display: block; font-family: "Songti SC", SimSun, serif; font-size: 20px; }
+    .brand small { color: var(--muted); font-size: 10px; letter-spacing: .18em; }
+    .status {
+      display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+      border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.72);
+      color: var(--muted); font-size: 11px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #bbb; }
+    .dot.running { background: var(--gold); animation: pulse 1.2s infinite; }
+    .dot.done { background: #5f8f74; }
+    .dot.error { background: var(--danger); }
+    @keyframes pulse { 50% { opacity: .35; } }
+    main {
+      max-width: 1400px; margin: 0 auto; padding: 0 28px 28px;
+      display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
+      box-shadow: 0 12px 30px rgba(38,49,47,.045); padding: 18px 20px;
+    }
+    .card h2 {
+      margin: 0 0 4px; font-family: "Songti SC", SimSun, serif;
+      font-size: 17px; font-weight: 600;
+    }
+    .card p.hint { margin: 0 0 14px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+    label { display: block; margin: 12px 0 5px; color: var(--muted); font-size: 10px; letter-spacing: .04em; }
+    input, textarea, select {
+      width: 100%; border: 1px solid var(--line); border-radius: 9px;
+      background: #fffdf9; color: var(--ink); font: inherit; font-size: 12px;
+      padding: 9px 10px; outline: none;
+    }
+    textarea { resize: vertical; line-height: 1.7; }
+    input:focus, textarea:focus, select:focus { border-color: var(--teal); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    button {
+      border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px;
+      background: #fbf7ef; color: var(--ink); font: inherit; font-size: 11.5px; cursor: pointer;
+    }
+    button:hover { border-color: #d9c9b3; }
+    button.primary { background: var(--teal); border-color: var(--teal); color: #fff7ea; flex: 1; }
+    button.primary:disabled { opacity: .55; cursor: wait; }
+    .sample { background: transparent; color: var(--muted); }
+    .rules { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; min-height: 22px; }
+    .rules span {
+      padding: 3px 7px; border-radius: 6px; background: #f3e8d7; color: #8a6a42;
+      font-family: Consolas, monospace; font-size: 9.5px;
+    }
+    .right { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+    .timeline { display: flex; flex-direction: column; gap: 0; max-height: 245px; overflow-y: auto; padding-right: 4px; }
+    .event { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; gap: 9px; padding: 7px 0; }
+    .event .dot { margin-top: 5px; background: #d8cec0; }
+    .event.done .dot { background: #5f8f74; }
+    .event.warn .dot { background: var(--gold); }
+    .event.err .dot { background: var(--danger); }
+    .event b { display: block; font-size: 11px; font-weight: 600; }
+    .event p { margin: 2px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; word-break: break-word; }
+    .event time { color: #b3a99c; font-family: Consolas, monospace; font-size: 9px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .panel-head b { font-family: "Songti SC", SimSun, serif; font-size: 15px; }
+    .panel-head span { color: var(--muted); font-size: 10px; }
+    details { border: 1px solid var(--line); border-radius: 10px; background: #fbf7ef; padding: 9px 11px; margin-top: 9px; }
+    summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+    pre {
+      margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; line-height: 1.65;
+      font-family: Consolas, "Cascadia Code", monospace; font-size: 10px;
+      max-height: 210px; overflow: auto; color: #5f5548;
+    }
+    .terminal {
+      min-height: 190px; max-height: 300px; overflow: auto; margin-top: 9px; padding: 12px 14px;
+      border-radius: 12px; background: #182724; color: #d9e7e1;
+      font-family: Consolas, "Cascadia Code", monospace; font-size: 10.5px; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .terminal .cursor { display: inline-block; width: 6px; height: 12px; background: var(--gold); vertical-align: -2px; animation: blink .8s infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+    .metric { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fbf7ef; }
+    .metric span { display: block; color: var(--muted); font-size: 9px; }
+    .metric b { display: block; margin-top: 3px; color: var(--teal); font-family: "Songti SC", SimSun, serif; font-size: 17px; font-weight: 600; }
+    .result-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; }
+    .badge { padding: 3px 8px; border-radius: 999px; font-size: 10px; }
+    .badge.pass { background: #e7f1eb; color: #3f7259; }
+    .badge.risk { background: #f8e7e2; color: #a04a37; }
+    .error-box { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: #f8e7e2; color: #a04a37; font-size: 11px; line-height: 1.7; white-space: pre-wrap; }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="mark">智</div>
+      <div>
+        <b>Agent Runtime</b>
+        <small>LOCAL DEBUG CONSOLE · 只在本机使用</small>
+      </div>
+    </div>
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">待运行</span></div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>运行配置</h2>
+      <p class="hint">调试沙盘使用固定规则快照，不会写入主系统审核记录。生产审核仍走 Java 侧的 E1 流程。</p>
+
+      <label>标题</label>
+      <input id="title" value="低价转让进口处方药" />
+
+      <label>正文</label>
+      <textarea id="content" rows="9">国家级配方，效果比市面上的都好，绝对安全。渠道是独家代理，外面买不到，需要的私我或者加微信备注来意。另外还有少量进口处方药可以出，价格好谈。</textarea>
+
+      <div class="row">
+        <div>
+          <label>方案</label>
+          <select id="mode">
+            <option value="e1">E1 · 最小规则目录</option>
+            <option value="rag">RAG · 紧凑检索</option>
+            <option value="b">B · 纯大模型</option>
+          </select>
+        </div>
+        <div>
+          <label>思考强度</label>
+          <select id="effort">
+            <option value="none">none（默认）</option>
+            <option value="low">low</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="sample" type="button" id="sampleRisk">违规样例</button>
+        <button class="sample" type="button" id="sampleClean">正常样例</button>
+        <button class="primary" type="button" id="run">运行并观察</button>
+      </div>
+
+      <label style="margin-top:16px">本次提供的规则</label>
+      <div id="rules" class="rules"><span>等待运行</span></div>
+      <p class="hint" style="margin-top:10px">页面只显示过程与结果；规则正文、模型 Key 不会出现在浏览器控制台里。</p>
+    </section>
+
+    <div class="right">
+      <section class="card">
+        <div class="panel-head"><b>运行过程</b><span>检索 → 提示词 → 模型流式输出 → JSON 解析</span></div>
+        <div id="timeline" class="timeline">
+          <div class="event"><span class="dot"></span><div><b>等待运行</b><p>点击左侧“运行并观察”，这里会实时出现每一个步骤。</p></div><time>--:--:--</time></div>
+        </div>
+        <details id="promptBox">
+          <summary>查看完整提示词（system + user）</summary>
+          <pre id="systemPrompt"></pre>
+          <pre id="userPrompt"></pre>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="panel-head"><b>模型输出</b><span id="streamState">尚未开始</span></div>
+        <div class="terminal" id="output"><span class="cursor"></span></div>
+        <div class="metrics">
+          <div class="metric"><span>prompt tokens</span><b id="promptTokens">—</b></div>
+          <div class="metric"><span>completion tokens</span><b id="completionTokens">—</b></div>
+          <div class="metric"><span>总耗时</span><b id="duration">—</b></div>
+          <div class="metric"><span>命中规则</span><b id="hitCount">—</b></div>
+        </div>
+        <div id="result"></div>
+        <div id="error"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id)
+    const state = { reading: false }
+
+    function setStatus(text, kind = '') {
+      $('statusText').textContent = text
+      $('statusDot').className = `dot ${kind}`.trim()
+    }
+
+    function now() {
+      return new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    }
+
+    function eventEl(title, message, kind = '') {
+      const row = document.createElement('div')
+      row.className = `event ${kind}`.trim()
+      row.innerHTML = `<span class="dot"></span><div><b></b><p></p></div><time>${now()}</time>`
+      row.querySelector('b').textContent = title
+      row.querySelector('p').textContent = message || ''
+      $('timeline').appendChild(row)
+      $('timeline').scrollTop = $('timeline').scrollHeight
+    }
+
+    function clearRun() {
+      $('timeline').innerHTML = ''
+      $('output').innerHTML = '<span class="cursor"></span>'
+      $('result').innerHTML = ''
+      $('error').innerHTML = ''
+      $('promptBox').open = false
+      $('systemPrompt').textContent = ''
+      $('userPrompt').textContent = ''
+      $('rules').innerHTML = ''
+      for (const id of ['promptTokens', 'completionTokens', 'duration', 'hitCount']) $(id).textContent = '—'
+      $('streamState').textContent = '正在连接…'
+    }
+
+    function handle(event, data) {
+      if (event === 'stage') {
+        const labels = {
+          request: '收到请求', rules: '规则就绪', prompt: '提示词组装',
+          model_start: '调用模型', parse: '解析输出',
+        }
+        eventEl(labels[data.stage] || data.stage, data.message || '', data.stage === 'model_start' ? 'warn' : 'done')
+        if (data.rules) {
+          $('rules').innerHTML = ''
+          if (!data.rules.length) {
+            $('rules').innerHTML = '<span>无规则（B 纯大模型）</span>'
+          } else {
+            for (const rule of data.rules) {
+              const chip = document.createElement('span')
+              chip.textContent = `${rule.code} · ${rule.name}`
+              chip.title = rule.category || ''
+              $('rules').appendChild(chip)
+            }
+          }
+        }
+        if (data.system || data.user) {
+          $('systemPrompt').textContent = data.system || ''
+          $('userPrompt').textContent = data.user || ''
+        }
+        if (data.stage === 'model_start') $('streamState').textContent = '模型流式输出中…'
+      } else if (event === 'delta') {
+        const pre = $('output')
+        const cursor = pre.querySelector('.cursor')
+        if (cursor) cursor.remove()
+        pre.textContent += data.text || ''
+        const c = document.createElement('span')
+        c.className = 'cursor'
+        pre.appendChild(c)
+        pre.scrollTop = pre.scrollHeight
+      } else if (event === 'usage') {
+        $('promptTokens').textContent = data.promptTokens ?? 0
+        $('completionTokens').textContent = data.completionTokens ?? 0
+      } else if (event === 'result') {
+        const d = data.data || {}
+        const level = Number(d.riskLevel)
+        const pass = level < 2
+        const label = ['通过', '疑似', '违规', '严重'][level] || `等级 ${level}`
+        const hitRules = d.hitRules || []
+        $('hitCount').textContent = String(hitRules.length)
+        $('duration').textContent = `${data.durationMs || 0}ms`
+        $('streamState').textContent = '解析完成'
+        const box = document.createElement('div')
+        box.innerHTML = `<div class="result-line"><span class="badge ${pass ? 'pass' : 'risk'}"></span><span class="reason"></span></div>`
+        box.querySelector('.badge').textContent = label
+        box.querySelector('.reason').textContent = d.reason || ''
+        if (hitRules.length) {
+          const line = document.createElement('div')
+          line.className = 'rules'
+          for (const r of hitRules) {
+            const chip = document.createElement('span')
+            chip.textContent = r.code || r
+            line.appendChild(chip)
+          }
+          box.appendChild(line)
+        }
+        const details = document.createElement('details')
+        details.innerHTML = '<summary>查看解析后的 JSON</summary><pre></pre>'
+        details.querySelector('pre').textContent = JSON.stringify(d, null, 2)
+        box.appendChild(details)
+        $('result').appendChild(box)
+        eventEl('完成', `等级 ${level}，${hitRules.length} 条命中规则`, pass ? 'done' : 'warn')
+      } else if (event === 'error') {
+        $('streamState').textContent = '运行失败'
+        $('error').innerHTML = ''
+        const box = document.createElement('div')
+        box.className = 'error-box'
+        box.textContent = data.message || '未知错误'
+        $('error').appendChild(box)
+        eventEl('错误', data.message || '未知错误', 'err')
+      } else if (event === 'done') {
+        setStatus('运行完成', 'done')
+        $('run').disabled = false
+      }
+    }
+
+    async function run() {
+      if (state.reading) return
+      state.reading = true
+      $('run').disabled = true
+      setStatus('运行中…', 'running')
+      clearRun()
+      const payload = {
+        title: $('title').value,
+        content: $('content').value,
+        mode: $('mode').value,
+        reasoningEffort: $('effort').value,
+      }
+      try {
+        const res = await fetch('/api/agent/debug/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const blocks = buffer.split('\n\n')
+          buffer = blocks.pop() || ''
+          for (const block of blocks) {
+            let event = 'message'
+            let data = {}
+            for (const line of block.split('\n')) {
+              if (line.startsWith('event: ')) event = line.slice(7).trim()
+              if (line.startsWith('data: ')) {
+                try { data = JSON.parse(line.slice(6)) } catch { data = { message: line.slice(6) } }
+              }
+            }
+            handle(event, data)
+          }
+        }
+        if (buffer.trim()) {
+          let event = 'message'
+          let data = {}
+          for (const line of buffer.split('\n')) {
+            if (line.startsWith('event: ')) event = line.slice(7).trim()
+            if (line.startsWith('data: ')) {
+              try { data = JSON.parse(line.slice(6)) } catch { data = {} }
+            }
+          }
+          handle(event, data)
+        }
+      } catch (err) {
+        setStatus('运行失败', 'error')
+        eventEl('连接失败', String(err.message || err), 'err')
+      } finally {
+        state.reading = false
+        $('run').disabled = false
+      }
+    }
+
+    $('run').addEventListener('click', run)
+    $('sampleRisk').addEventListener('click', () => {
+      $('title').value = '低价转让进口处方药'
+      $('content').value = '国家级配方，效果比市面上的都好，绝对安全。渠道是独家代理，外面买不到，需要的私我或者加微信备注来意。另外还有少量进口处方药可以出，价格好谈。'
+    })
+    $('sampleClean').addEventListener('click', () => {
+      $('title').value = '周末阳台种菜记录'
+      $('content').value = '这个周末把阳台的两个花盆重新整理了，种了小葱和薄荷。每天浇一点水，等它们慢慢长起来。'
+    })
+  </script>
+</body>
+</html>

@@ -24,6 +24,68 @@ class OpenAICompatProvider(BaseProvider):
             timeout=settings.timeout_seconds,
         )
 
+    def judge_stream(self, system_prompt: str, user_prompt: str,
+                     reasoning_effort: str | None = None,
+                     max_tokens: int | None = None):
+        """流式调用：逐块产出 delta，最后产出 usage。供本地调试页观察模型过程。"""
+        effort = reasoning_effort or settings.reasoning_effort
+        tokens = max_tokens or settings.max_output_tokens
+        try:
+            stream = self._client.chat.completions.create(
+                model=settings.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=settings.temperature,
+                response_format={"type": "json_object"},
+                reasoning_effort=effort,
+                max_tokens=tokens,
+                timeout=settings.timeout_seconds,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            parts: list[str] = []
+            usage = None
+            finish = None
+            for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    usage = chunk.usage
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                finish = choice.finish_reason or finish
+                delta = getattr(choice.delta, "content", None) if choice.delta else None
+                if delta:
+                    parts.append(delta)
+                    yield {"type": "delta", "text": delta}
+            text = "".join(parts)
+            if not text.strip():
+                raise ProviderError(
+                    f"模型返回空内容（finish_reason={finish}）。常见原因：思考过程耗尽了输出预算，"
+                    f"或 max_tokens 设置过小"
+                )
+            if finish == "length":
+                raise ProviderError(
+                    f"模型输出被截断（finish_reason=length，max_tokens={tokens}），JSON 不完整"
+                )
+            yield {
+                "type": "usage",
+                "promptTokens": getattr(usage, "prompt_tokens", 0) if usage else 0,
+                "completionTokens": getattr(usage, "completion_tokens", 0) if usage else 0,
+                "model": settings.model,
+            }
+        except ProviderError:
+            raise
+        except APITimeoutError as e:
+            raise ProviderError(f"模型调用超时（{settings.timeout_seconds} 秒）") from e
+        except APIConnectionError as e:
+            raise ProviderError(f"无法连接模型服务：{e}") from e
+        except APIStatusError as e:
+            raise ProviderError(f"模型服务返回错误（HTTP {e.status_code}）：{e.message}") from e
+        except Exception as e:  # noqa: BLE001
+            raise ProviderError(f"模型调用失败：{type(e).__name__}: {e}") from e
+
     def judge(self, system_prompt: str, user_prompt: str,
               reasoning_effort: str | None = None,
               max_tokens: int | None = None) -> ProviderResult:

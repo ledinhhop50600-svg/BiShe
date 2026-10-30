@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from api.adapt import router as adapt_router
 from api.audit import router as audit_router
+from api.debug import router as debug_router
 from config import settings
 
 app = FastAPI(
@@ -23,6 +24,7 @@ app = FastAPI(
 
 app.include_router(audit_router)
 app.include_router(adapt_router)
+app.include_router(debug_router)
 
 
 @app.exception_handler(RequestValidationError)
