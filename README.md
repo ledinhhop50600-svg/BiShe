@@ -127,6 +127,8 @@ Agent 启动后访问 **http://localhost:8001/debug**：可以选择 E1 / RAG / 
    并打开 `http://localhost:5173/`。
 
 > `start.bat` 使用 GBK + CRLF（cmd.exe 要求）。不要用编辑器另存为 UTF-8，否则中文会乱码。
+>
+> 也可以双击根目录的 **`启动.bat`**：逻辑相同，附带健康检查；执行 `启动.bat debug` 会同时打开 Agent 调试台。
 > 本机 JDK17 / Maven 在 `F:\Dev\toolchains`，脚本顶部会自动检测并设置 `JAVA_HOME` / `PATH`；
 > 换机器时改那两行，或把 `bin` 加入系统 PATH（系统默认的 Java 8 跑不了 Spring Boot 4）。
 >
